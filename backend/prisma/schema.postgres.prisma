@@ -1,0 +1,218 @@
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String?
+  phone         String?
+  companyName   String?
+  role          Role      @default(USER)
+  isActive      Boolean   @default(true)
+  resetToken    String?
+  resetTokenExp DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions Transaction[]
+  notifications Notification[]
+}
+
+enum Role {
+  ADMIN
+  USER
+  RESELLER
+}
+
+model Hotspot {
+  id            String      @id @default(uuid())
+  name          String
+  address       String?
+  location      String?
+  latitude      Float?
+  longitude     Float?
+  status        HotspotStatus @default(ACTIVE)
+  ip            String?
+  port          Int?
+  apiUser       String?
+  apiPassword   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  plans         Plan[]
+  vouchers      Voucher[]
+  transactions  Transaction[]
+}
+
+enum HotspotStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model Plan {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  type        PlanType
+  price       Float
+  duration    Int
+  durationUnit String?
+  bandwidth   Int?
+  bandwidthUnit String?
+  isActive    Boolean     @default(true)
+  hotspotId   String?
+  hotspot     Hotspot?    @relation(fields: [hotspotId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  vouchers    Voucher[]
+}
+
+enum PlanType {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model Voucher {
+  id        String       @id @default(uuid())
+  code      String       @unique
+  status    VoucherStatus @default(ACTIVE)
+  price     Float?
+  usedAt    DateTime?
+  expiresAt DateTime?
+  planId    String?
+  plan      Plan?        @relation(fields: [planId], references: [id])
+  hotspotId String?
+  hotspot   Hotspot?     @relation(fields: [hotspotId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+enum VoucherStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
+
+model Transaction {
+  id            String      @id @default(uuid())
+  amount        Float
+  currency      String      @default("XOF")
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  phone         String?
+  voucherCode   String?
+  voucherId     String?
+  hotspotId     String?
+  hotspot       Hotspot?    @relation(fields: [hotspotId], references: [id])
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id])
+  paymentRef    String?
+  fedaPayId     String?
+  fedaPayUrl    String?
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+enum PaymentMethod {
+  ORANGE_MONEY
+  MTN_MOMO
+  MOOV_MONEY
+  CARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Reseller {
+  id             String   @id @default(uuid())
+  name           String
+  email          String?
+  phone          String?
+  commissionRate Float    @default(10)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Partner {
+  id             String   @id @default(uuid())
+  name           String
+  type           String?
+  email          String?
+  phone          String?
+  commissionRate Float    @default(10)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model RoamingSession {
+  id              String   @id @default(uuid())
+  partnerName     String
+  subscriberPhone String?
+  dataUsed        Float    @default(0)
+  amount          Float    @default(0)
+  status          String   @default("ACTIVE")
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model RoamingAgreement {
+  id            String   @id @default(uuid())
+  partnerName   String
+  partnerIp     String?
+  roamingFee    Float    @default(10)
+  status        String   @default("ACTIVE")
+  startDate     DateTime @default(now())
+  endDate       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model RoamingSettlement {
+  id              String   @id @default(uuid())
+  partnerName     String
+  amount          Float
+  currency        String   @default("XOF")
+  status          String   @default("PENDING")
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  settledAt       DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String?
+  channel   String?
+  recipient String?
+  message   String?
+  status    String   @default("PENDING")
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

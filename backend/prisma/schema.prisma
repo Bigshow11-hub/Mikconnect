@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  password    String
+  name        String
+  phone       String?
+  role        String    @default("ADMIN")
+  companyName String?
+  country     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  hotspots    Hotspot[]
+  resellers   Reseller[]
+  apiKeys     ApiKey[]
+  transactions Transaction[]
+}
+
+model Hotspot {
+  id           String        @id @default(uuid())
+  name         String
+  location     String?
+  routerIp     String
+  routerPort   Int           @default(8728)
+  username     String
+  password     String
+  status       String        @default("ACTIVE")
+  bandwidth    String?
+  macAddress   String?
+  serialNumber String?
+  userId       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  plans        Plan[]
+  vouchers     Voucher[]
+  connectionLogs ConnectionLog[]
+  sourceRoamingSessions RoamingSession[] @relation("SourceHotspot")
+  destRoamingSessions   RoamingSession[] @relation("DestHotspot")
+
+  @@map("hotspots")
+}
+
+model Plan {
+  id          String   @id @default(uuid())
+  name        String
+  type        String
+  duration    Int
+  price       Float
+  bandwidth   String?
+  isActive    Boolean  @default(true)
+  hotspotId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hotspot     Hotspot  @relation(fields: [hotspotId], references: [id])
+  vouchers    Voucher[]
+
+  @@map("plans")
+}
+
+model Voucher {
+  id          String        @id @default(uuid())
+  code        String        @unique
+  price       Float
+  status      String        @default("ACTIVE")
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  pdfUrl      String?
+  hotspotId   String
+  planId      String
+  transactionId String?
+  createdAt   DateTime      @default(now())
+
+  hotspot     Hotspot       @relation(fields: [hotspotId], references: [id])
+  plan        Plan          @relation(fields: [planId], references: [id])
+  transaction Transaction?  @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+
+  @@map("vouchers")
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  amount        Float
+  method        String
+  status        String            @default("PENDING")
+  reference     String            @unique
+  phoneNumber   String?
+  userId        String?
+  hotspotId     String?
+  metadata      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  vouchers      Voucher[]
+  user          User?             @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
+
+model Reseller {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String
+  email       String?
+  commission  Float    @default(0.0)
+  parentId    String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+  parent      Reseller? @relation("ResellerTree", fields: [parentId], references: [id])
+  children    Reseller[] @relation("ResellerTree")
+
+  @@map("resellers")
+}
+
+model ConnectionLog {
+  id          String   @id @default(uuid())
+  userName    String?
+  userPhone   String?
+  deviceMac   String?
+  ipAddress   String?
+  bytesIn     Int      @default(0)
+  bytesOut    Int      @default(0)
+  sessionTime Int      @default(0)
+  hotspotId   String
+  createdAt   DateTime @default(now())
+
+  hotspot     Hotspot  @relation(fields: [hotspotId], references: [id])
+
+  @@map("connection_logs")
+}
+
+model RoamingAgreement {
+  id              String   @id @default(uuid())
+  name            String
+  providerIspId   String
+  consumerIspId   String
+  roamingFee      Float    @default(0.05)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  settlements     RoamingSettlement[]
+
+  @@map("roaming_agreements")
+}
+
+model RoamingSettlement {
+  id          String   @id @default(uuid())
+  agreementId String
+  periodStart DateTime
+  periodEnd   DateTime
+  totalAmount Float
+  totalFee    Float
+  netAmount   Float
+  status      String   @default("PENDING")
+  settledAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  agreement   RoamingAgreement @relation(fields: [agreementId], references: [id])
+  sessions    RoamingSession[]
+
+  @@map("roaming_settlements")
+}
+
+model RoamingSession {
+  id              String   @id @default(uuid())
+  code            String
+  sourceHotspotId String
+  destHotspotId   String
+  amount          Float
+  commission      Float    @default(0.0)
+  roamingFee      Float    @default(0.0)
+  status          String   @default("ACTIVE")
+  dataUsed        Int      @default(0)
+  sessionDuration Int      @default(0)
+  settlementId    String?
+  createdAt       DateTime @default(now())
+  endedAt         DateTime?
+
+  sourceHotspot   Hotspot            @relation("SourceHotspot", fields: [sourceHotspotId], references: [id])
+  destHotspot     Hotspot            @relation("DestHotspot", fields: [destHotspotId], references: [id])
+  settlement      RoamingSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@map("roaming_sessions")
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  userId    String
+  isActive  Boolean  @default(true)
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("api_keys")
+}
+
+model Partner {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  commissionRate Float  @default(0.10)
+  totalEarned Float    @default(0.0)
+  referralCode String  @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("partners")
+}

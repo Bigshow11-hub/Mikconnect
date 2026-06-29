@@ -1,0 +1,29 @@
+{
+  "name": "mikconnect",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "desktop"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "db:generate": "npm run db:generate -w backend",
+    "db:push": "npm run db:push -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "build:netlify": "node scripts/prebuild-netlify.js && npm run build -w backend && npm run build -w frontend"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "concurrently": "^8.2.2",
+    "playwright": "^1.61.1"
+  },
+  "dependencies": {
+    "@netlify/functions": "^5.3.0",
+    "framer-motion": "^12.42.0",
+    "serverless-http": "^4.0.0"
+  }
+}
