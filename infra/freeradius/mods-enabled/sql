@@ -1,0 +1,34 @@
+sql {
+  dialect = "postgresql"
+  driver = "rlm_sql_${dialect}"
+
+  server = "${env:RADIUS_DB_HOST}"
+  port = ${env:RADIUS_DB_PORT}
+  login = "${env:RADIUS_DB_USER}"
+  password = "${env:RADIUS_DB_PASSWORD}"
+  radius_db = "${env:RADIUS_DB_NAME}"
+
+  acct_table1 = radacct
+  acct_table2 = radacct
+  authcheck_table = radcheck
+  authreply_table = radreply
+  read_groups = no
+  read_profiles = no
+  delete_stale_sessions = yes
+
+  pool {
+    start = 2
+    min = 1
+    max = 8
+    spare = 2
+    uses = 0
+    lifetime = 0
+    cleanup_interval = 30
+    idle_timeout = 60
+    retry_delay = 1
+    spread = yes
+  }
+
+  $INCLUDE ${modconfdir}/sql/main/${dialect}/queries.conf
+}
+

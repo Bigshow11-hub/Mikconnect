@@ -1,0 +1,170 @@
+/*
+ * mikconnect — styles globaux (apps/web).
+ * Le design system vit dans @mikconnect/ui (tokens OKLCH + thème Tailwind v4).
+ * Ici on importe Tailwind, le thème partagé, on déclare la source à scanner
+ * (packages/ui) et on surcharge les stacks de police avec les fonts chargées
+ * par next/font dans layout.tsx.
+ */
+
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+@import "../../../../packages/ui/src/styles/theme.css";
+
+/* Scan les classes utilisées dans le package UI partagé (monorepo). */
+@source "../../../../packages/ui/src";
+
+/*
+ * Les variables --font-sans-display / --font-mono-display sont injectées par
+ * next/font sur <html> (layout.tsx). On recompose la stack complète avec
+ * fallbacks robustes (si la font self-hosted n'est pas chargée).
+ */
+:root {
+  --font-sans: "Manrope Variable", "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+::selection {
+  background: var(--primary-subtle);
+  color: var(--primary-subtle-foreground);
+}
+
+@keyframes landing-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.landing-reveal {
+  animation: landing-reveal 560ms var(--ease-out-expo) both;
+}
+
+.landing-reveal-delay {
+  animation-delay: 100ms;
+}
+
+.dashboard-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.dashboard-panel--quiet {
+  background: var(--surface);
+}
+
+.dashboard-panel--ink {
+  border-color: transparent;
+  background: var(--inverse);
+  color: var(--inverse-foreground);
+}
+
+.operational-pulse {
+  background-image: linear-gradient(90deg, transparent, var(--success), transparent);
+  background-size: 200% 100%;
+  animation: operational-pulse 3.6s linear infinite;
+}
+
+@keyframes operational-pulse {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes chart-rise {
+  from {
+    transform: scaleY(0.08);
+    opacity: 0.45;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sale-enter {
+  0% {
+    transform: translateY(-8px);
+    opacity: 0;
+    border-color: var(--primary);
+  }
+  45% {
+    border-color: var(--primary);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+    border-color: var(--border);
+  }
+}
+
+.sale-enter {
+  animation: sale-enter 520ms var(--ease-out-expo) both;
+}
+
+@keyframes recent-sale-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes recent-sale-confirmed {
+  0%,
+  100% {
+    background-color: var(--surface);
+  }
+  35% {
+    background-color: var(--success-subtle);
+  }
+}
+
+.recent-sale-strip__track {
+  animation: recent-sale-scroll 28s linear infinite;
+}
+
+.recent-sale-strip--fresh {
+  animation: recent-sale-confirmed 1.2s var(--ease-out-expo) both;
+}
+
+.chart-rise {
+  transform-origin: bottom;
+  animation: chart-rise 420ms var(--ease-out-expo) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal {
+    animation: none;
+  }
+  .chart-rise {
+    animation: none;
+  }
+  .sale-enter {
+    animation: none;
+  }
+  .recent-sale-strip__track,
+  .recent-sale-strip--fresh,
+  .operational-pulse {
+    animation: none;
+  }
+}
+
+html[data-theme-transition="true"] body,
+html[data-theme-transition="true"] header,
+html[data-theme-transition="true"] aside,
+html[data-theme-transition="true"] nav,
+html[data-theme-transition="true"] main,
+html[data-theme-transition="true"] section,
+html[data-theme-transition="true"] div {
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+}

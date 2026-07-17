@@ -1,2 +1,0 @@
-mik_id,name,location,routerIp,routerPort,status,bandwidth,macAddress,serialNumber,mikrotik_username,mikrotik_password_placeholder,mik_userId,owner_email,createdAt,updatedAt
-7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,"Guinée, Kindia",10.66.2.196,8728,ACTIVE,illimité,,,radius-imported,-REDACTED-,f1b42ff0-8e38-48ab-89b7-2c20f4b35292,bigishow57@gmail.com,2026-06-29T02:17:52.993Z,2026-06-29T02:17:52.993Z

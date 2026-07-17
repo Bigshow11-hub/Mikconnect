@@ -1,0 +1,164 @@
+/*
+ * mikconnect — thème Tailwind v4 (CSS-first).
+ * Importé par apps/web/src/app/globals.css via
+ *   @import "tailwindcss";
+ *   @import "@mikconnect/ui/styles/theme.css";
+ *   @source "../../../packages/ui/src";
+ *
+ * @theme inline mappe les tokens OKLCH (tokens.css) vers les utilitaires
+ * Tailwind (bg-*, text-*, border-*, rounded-*, font-*, ease-*, etc.).
+ * Structure "inline" : les utilitaires référencent les var(--*) en runtime,
+ * ce qui permet d'ajouter un thème dark plus tard sans régénérer le CSS.
+ */
+
+@import "./tokens.css";
+
+@theme inline {
+  /* Surfaces */
+  --color-canvas: var(--canvas);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  /* Ink & text */
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+
+  /* Borders */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-inverse: var(--inverse);
+  --color-inverse-foreground: var(--inverse-foreground);
+
+  /* Primary (terracotta) */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-foreground: var(--primary-subtle-foreground);
+
+  /* Accent (teal) */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-subtle-foreground: var(--accent-subtle-foreground);
+
+  /* Focus */
+  --color-ring: var(--ring);
+  --color-ring-offset: var(--ring-offset);
+
+  /* Sémantique — success */
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+
+  /* Sémantique — warning (fill pale, texte sombre) */
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+
+  /* Sémantique — danger */
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-subtle-foreground: var(--danger-subtle-foreground);
+
+  /* Sémantique — neutral status */
+  --color-neutral-status: var(--neutral-status);
+  --color-neutral-status-subtle: var(--neutral-status-subtle);
+  --color-neutral-status-foreground: var(--neutral-status-foreground);
+  --color-neutral-status-subtle-foreground: var(--neutral-status-subtle-foreground);
+
+  /* Radii */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  /* Fonts */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Eases (noms distincts pour éviter les collisions built-in) */
+  --ease-quint: var(--ease-out);
+  --ease-expo: var(--ease-out-expo);
+  --ease-smooth: var(--ease-standard);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "kern", "liga", "calt";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Mono : nombres tabulaires pour alignement des montants/code tickets */
+  .font-mono,
+  [class*="font-mono"] {
+    font-feature-settings:
+      "tnum" 1,
+      "calt" 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus visible : anneau primary + offset blanc (a11y, soleil) */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+
+  /* Supprime l'outline par défaut quand focus-visible gère (sur les éléments
+     qui héritent du ring). On garde l'outline natif pour les éléments
+     non-stylés par nos composants. */
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Reduced motion : crossfade/instant, jamais de transition bloquée */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Headings : équilibre des lignes (pas d'orphelins sur titres) */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}

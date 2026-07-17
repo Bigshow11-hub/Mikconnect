@@ -1,10 +1,69 @@
+# Dépendances
 node_modules/
+.pnpm-store/
+
+# Build & caches
+.next/
+out/
 dist/
+build/
+*.tsbuildinfo
+.turbo/
+.cache/
+
+# Variables d'environnement
 .env
-.env.production
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS / éditeurs
 .DS_Store
-.vite/
-prisma/*.db
-prisma/*.db-journal
-scripts/
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Prisma
+apps/api/prisma/migrations/dev.db*
+
+# Tests & couverture
+coverage/
+.nyc_output/
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+
+# impeccable-ignore-start
+# Fichiers éphémères et état runtime du skill Impeccable.
+# Non ancrés : .impeccable peut être à la racine ou dans un workspace
+# imbriqué (apps/web/.impeccable/...). Les motifs ancrés rateraient ces cas.
+# Artefacts partagés à garder suivis : config.json, live/config.json,
+# design.json, critique/*.md.
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/*.png
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/cache/
+.impeccable/live/manual-edit-apply-transaction.json
+.impeccable/live/manual-edit-events.jsonl
+.impeccable/live/manual-edit-evidence/
+.impeccable/live/pending-manual-edits.json
+.impeccable/live/deferred-svelte-component-accepts.json
+.impeccable/live/*.png
+# impeccable-ignore-end
+.next-dev/
+
+# Outils et artefacts locaux Codex
+.agents/
+tmp/
+output/

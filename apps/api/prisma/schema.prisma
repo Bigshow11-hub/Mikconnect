@@ -1,0 +1,441 @@
+// Schéma Prisma multi-tenant mikconnect.
+// Isolation par tenant_id + Row-Level Security côté PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  AGENT
+  ADMIN
+}
+
+enum Country {
+  CI
+  GN
+}
+
+enum Currency {
+  XOF
+  GNF
+}
+
+enum RouterStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum TicketStatus {
+  ISSUED
+  SOLD
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+enum SalesChannel {
+  AGENT
+  MOBILE_MONEY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  ORANGE
+  MTN
+  MOOV
+  WAVE
+  SUDI
+}
+
+enum SmsStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+// --- Tenants & utilisateurs ---
+
+model Tenant {
+  id        String           @id @default(cuid())
+  name      String
+  country   Country
+  currency  Currency
+  tier      SubscriptionTier @default(FREE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  users             User[]
+  zones             Zone[]
+  routers           Router[]
+  plans             Plan[]
+  tickets           Ticket[]
+  ticketBatches     TicketBatch[]
+  agents            Agent[]
+  sales             Sale[]
+  payments          Payment[]
+  smsDeliveries     SmsDelivery[]
+  sessions          Session[]
+  radiusCredentials RadiusCredential[]
+  subscription      Subscription?
+  auditLogs         AuditLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  name         String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent         Agent?
+  refreshTokens RefreshToken[]
+
+  @@index([tenantId])
+}
+
+// --- Refresh tokens (rotation + révocation) ---
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  issuedAt  DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ip        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([revokedAt])
+}
+
+// --- Zones & routeurs ---
+
+model Zone {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routers Router[]
+
+  @@index([tenantId])
+}
+
+model Router {
+  id                   String       @id @default(cuid())
+  tenantId             String
+  zoneId               String?
+  label                String
+  host                 String
+  apiUser              String
+  apiPasswordEncrypted String
+  apiPort              Int          @default(8728)
+  apiTls               Boolean      @default(false)
+  status               RouterStatus @default(OFFLINE)
+  lastSeenAt           DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  zone     Zone?     @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  sessions Session[]
+
+  @@index([tenantId])
+  @@index([zoneId])
+}
+
+// --- Forfaits d'accès (configurables par tenant) ---
+
+model Plan {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  durationMinutes Int
+  dataLimitMb     Int?
+  price           Int
+  currency        Currency
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tickets       Ticket[]
+  ticketBatches TicketBatch[]
+
+  @@index([tenantId])
+}
+
+// --- Agents & tickets ---
+
+model Agent {
+  id                String   @id @default(cuid())
+  tenantId          String
+  userId            String   @unique
+  commissionPercent Float    @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tickets       Ticket[]
+  ticketBatches TicketBatch[]
+  sales         Sale[]
+
+  @@index([tenantId])
+}
+
+model Ticket {
+  id        String       @id @default(cuid())
+  tenantId  String
+  code      String       @unique
+  planId    String
+  agentId   String?
+  batchId   String?
+  saleId    String?
+  status    TicketStatus @default(ISSUED)
+  createdAt DateTime     @default(now())
+  soldAt    DateTime?
+  usedAt    DateTime?
+  expiresAt DateTime?
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan             Plan              @relation(fields: [planId], references: [id])
+  agent            Agent?            @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  batch            TicketBatch?      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sale             Sale?
+  payment          Payment?
+  sessions         Session[]
+  radiusCredential RadiusCredential?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([agentId])
+  @@index([batchId])
+}
+
+model TicketBatch {
+  id         String   @id @default(cuid())
+  tenantId   String
+  planId     String
+  agentId    String?
+  quantity   Int
+  codeLength Int
+  createdAt  DateTime @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan    Plan     @relation(fields: [planId], references: [id])
+  agent   Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  tickets Ticket[]
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// --- Ventes & paiements ---
+
+model Sale {
+  id         String       @id @default(cuid())
+  tenantId   String
+  ticketId   String       @unique
+  agentId    String?
+  amount     Int
+  commission Int          @default(0)
+  channel    SalesChannel
+  createdAt  DateTime     @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket  Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agent   Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  payment Payment?
+
+  @@index([tenantId])
+  @@index([agentId])
+}
+
+model Payment {
+  id            String          @id @default(cuid())
+  tenantId      String
+  ticketId      String          @unique
+  saleId        String?         @unique
+  provider      PaymentProvider
+  providerTxId  String?         @unique
+  amount        Int
+  currency      Currency
+  status        PaymentStatus   @default(PENDING)
+  customerPhone String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sale        Sale?        @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  smsDelivery SmsDelivery?
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model SmsDelivery {
+  id                String    @id @default(cuid())
+  tenantId          String
+  paymentId         String    @unique
+  phone             String
+  provider          String
+  status            SmsStatus @default(PENDING)
+  providerMessageId String?
+  attempts          Int       @default(0)
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+// --- Sessions RADIUS (accounting) ---
+
+model Session {
+  id              String    @id @default(cuid())
+  tenantId        String
+  ticketId        String
+  routerId        String?
+  acctUniqueId    String    @unique
+  radiusSessionId String
+  nasIpAddress    String?
+  framedIpAddress String?
+  macAddress      String?
+  startedAt       DateTime
+  updatedAt       DateTime  @updatedAt
+  endedAt         DateTime?
+  sessionSeconds  Int       @default(0)
+  inputOctets     BigInt    @default(0)
+  outputOctets    BigInt    @default(0)
+  dataUsedMb      Int       @default(0)
+  terminateCause  String?
+  createdAt       DateTime  @default(now())
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  router Router? @relation(fields: [routerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([ticketId])
+  @@index([routerId])
+  @@index([startedAt])
+  @@index([endedAt])
+}
+
+model RadiusCredential {
+  id             Int      @id @default(autoincrement())
+  tenantId       String
+  ticketId       String   @unique
+  username       String   @unique
+  password       String
+  sessionTimeout Int
+  dataLimitBytes BigInt?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([active])
+}
+
+model RadiusAccounting {
+  id                 BigInt    @id @default(autoincrement()) @map("radacctid")
+  acctSessionId      String    @map("acctsessionid")
+  acctUniqueId       String    @unique @map("acctuniqueid")
+  username           String
+  nasIpAddress       String    @map("nasipaddress") @db.Inet
+  framedIpAddress    String?   @map("framedipaddress") @db.Inet
+  calledStationId    String?   @map("calledstationid")
+  callingStationId   String?   @map("callingstationid")
+  acctStartTime      DateTime? @map("acctstarttime")
+  acctUpdateTime     DateTime? @map("acctupdatetime")
+  acctStopTime       DateTime? @map("acctstoptime")
+  acctSessionTime    BigInt?   @map("acctsessiontime")
+  acctInputOctets    BigInt?   @map("acctinputoctets")
+  acctOutputOctets   BigInt?   @map("acctoutputoctets")
+  acctTerminateCause String?   @map("acctterminatecause")
+
+  @@index([username])
+  @@index([acctUpdateTime])
+  @@map("radacct")
+}
+
+// --- Abonnement mikconnect (palier du tenant) ---
+
+model Subscription {
+  id               String             @id @default(cuid())
+  tenantId         String             @unique
+  tier             SubscriptionTier   @default(FREE)
+  status           SubscriptionStatus @default(TRIALING)
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// --- Audit ---
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([createdAt])
+}

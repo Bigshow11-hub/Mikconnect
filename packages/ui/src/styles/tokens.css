@@ -1,0 +1,189 @@
+/*
+ * mikconnect — tokens OKLCH (source de vérité).
+ * Palette produit : bleu-encre, cobalt signal et vert réseau.
+ * + l'interview init Impeccable (Restrained, sans+mono, Responsive).
+ * Voir PRODUCT.md et DESIGN.md pour la doctrine (No-Cream, Sunlight,
+ * Ledger, No-Eyebrow, Flat-By-Default).
+ *
+ * Conformité skill Impeccable :
+ *  - bg pur blanc oklch(1 0 0) (pas de cream/sable ; lisible au soleil).
+ *  - ink ≥7:1 vs bg (Sunlight Rule).
+ *  - primary chroma ≤ 0.23 ; text-on-fill blanc forcé (L 0.42-0.78 + chroma ≥ 0.08).
+ *  - accent distinct de primary en hue ET luminance.
+ *  - warning en fill pale (L > 0.85) → texte sombre autorisé.
+ *  - Tout statut sémantique est accompagné d'une icône + libellé (jamais couleur seule).
+ */
+
+:root {
+  color-scheme: light;
+  --canvas: oklch(0.972 0.008 255);
+  /* --- Architectural (surfaces) --- */
+  --bg: oklch(1 0 0); /* blanc pur — fond par défaut */
+  --surface: oklch(0.985 0.006 255);
+  --surface-2: oklch(0.952 0.012 255);
+  --surface-3: oklch(0.918 0.016 255);
+
+  /* --- Ink & text (contraste soleil) --- */
+  --ink: oklch(0.25 0.035 255);
+  --muted: oklch(0.46 0.025 255);
+  --muted-strong: oklch(0.35 0.03 255);
+
+  /* --- Borders & dividers --- */
+  --border: oklch(0.89 0.014 255);
+  --border-strong: oklch(0.73 0.025 255);
+
+  --inverse: oklch(0.205 0.045 255);
+  --inverse-foreground: oklch(0.98 0.003 255);
+
+  /* --- Brand : Cobalt signal (primary) --- */
+  --primary: oklch(0.53 0.18 258);
+  --primary-hover: oklch(0.47 0.18 258);
+  --primary-active: oklch(0.41 0.17 258);
+  --primary-foreground: oklch(1 0 0); /* blanc sur fill primary */
+  --primary-subtle: oklch(0.95 0.028 258);
+  --primary-subtle-foreground: oklch(0.42 0.15 258);
+
+  /* --- Accent : Teal profond (secondary brand) --- */
+  --accent: oklch(0.59 0.115 160);
+  --accent-hover: oklch(0.52 0.11 160);
+  --accent-active: oklch(0.46 0.105 160);
+  --accent-foreground: oklch(1 0 0); /* blanc sur fill accent */
+  --accent-subtle: oklch(0.958 0.032 160);
+  --accent-subtle-foreground: oklch(0.4 0.09 160);
+
+  /* --- Focus ring (accessibilité) --- */
+  --ring: oklch(0.53 0.18 258);
+  --ring-offset: oklch(1 0 0); /* offset blanc sur fond clair */
+
+  /* --- Sémantique : status (toujours icône + libellé, jamais couleur seule) --- */
+  /* success : vendu / actif / connecté */
+  --success: oklch(0.48 0.1 150);
+  --success-strong: oklch(0.4 0.11 150);
+  --success-subtle: oklch(0.965 0.022 150);
+  --success-foreground: oklch(1 0 0);
+  --success-subtle-foreground: oklch(0.4 0.11 150);
+
+  /* warning : en attente / bientôt expiré — fill PALE (L > 0.85), texte sombre */
+  --warning: oklch(0.86 0.09 75); /* pale amber pour fills texte-sombre */
+  --warning-strong: oklch(0.66 0.14 75); /* amber saturé pour dot/icone seulement */
+  --warning-subtle: oklch(0.965 0.028 75);
+  --warning-foreground: oklch(0.3 0.018 31); /* ink sur warning pale */
+  --warning-subtle-foreground: oklch(0.42 0.13 75);
+
+  /* danger : expiré / échec / hors ligne / écart agent */
+  --danger: oklch(0.45 0.16 20); /* deep red — distinct du primary (plus sombre + hue ~20) */
+  --danger-strong: oklch(0.38 0.17 20);
+  --danger-subtle: oklch(0.965 0.024 20);
+  --danger-foreground: oklch(1 0 0);
+  --danger-subtle-foreground: oklch(0.38 0.17 20);
+
+  /* neutral status : émis / annulé / par défaut (pas de connotation) */
+  --neutral-status: oklch(0.55 0.012 31);
+  --neutral-status-subtle: oklch(0.965 0.006 31);
+  --neutral-status-foreground: oklch(1 0 0);
+  --neutral-status-subtle-foreground: oklch(0.45 0.014 31);
+
+  /* --- Radii (ledger : légèrement serrés) --- */
+  --radius-none: 0;
+  --radius-sm: 4px; /* badges, chips */
+  --radius-md: 8px; /* inputs, buttons */
+  --radius-lg: 14px; /* cards, modale */
+  --radius-full: 9999px;
+
+  /* --- Shadows (Flat-By-Default ; ombre = réponse à un état) --- */
+  --shadow-focus-ring: 0 0 0 2px var(--ring-offset), 0 0 0 4px var(--ring);
+  --shadow-modal-lift:
+    0 8px 32px -8px oklch(0.3 0.018 31 / 0.2), 0 2px 8px -2px oklch(0.3 0.018 31 / 0.1);
+  --shadow-toast: 0 4px 16px -4px oklch(0.3 0.018 31 / 0.12);
+
+  /* --- Motion (Responsive : ease-out exponentiel, jamais bounce/elastic) --- */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* ease-out-expo */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* material standard — transitions de fond */
+
+  /* --- Typography stacks (police chargée via next/font dans apps/web) --- */
+  --font-sans:
+    "Manrope Variable", "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* --- Spacing scale (échelle 4px) --- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+}
+
+/* Mode sombre volontaire pour la gestion nocturne. Le clair reste le défaut
+   afin de préserver la lisibilité en plein soleil. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: oklch(0.16 0.025 255);
+  --bg: oklch(0.19 0.03 255);
+  --surface: oklch(0.225 0.032 255);
+  --surface-2: oklch(0.265 0.034 255);
+  --surface-3: oklch(0.305 0.035 255);
+
+  --ink: oklch(0.94 0.009 31);
+  --muted: oklch(0.78 0.012 31);
+  --muted-strong: oklch(0.87 0.011 31);
+  --border: oklch(0.36 0.02 31);
+  --border-strong: oklch(0.48 0.024 31);
+
+  --inverse: oklch(0.105 0.014 31);
+  --inverse-foreground: oklch(0.97 0.006 31);
+
+  --primary: oklch(0.7 0.105 252);
+  --primary-hover: oklch(0.76 0.095 252);
+  --primary-active: oklch(0.64 0.105 252);
+  --primary-foreground: oklch(0.16 0.018 31);
+  --primary-subtle: oklch(0.27 0.04 252);
+  --primary-subtle-foreground: oklch(0.84 0.07 252);
+
+  --accent: oklch(0.74 0.11 160);
+  --accent-hover: oklch(0.8 0.1 160);
+  --accent-active: oklch(0.67 0.105 160);
+  --accent-foreground: oklch(0.16 0.018 31);
+  --accent-subtle: oklch(0.25 0.04 160);
+  --accent-subtle-foreground: oklch(0.84 0.09 160);
+
+  --ring: oklch(0.72 0.14 31.3);
+  --ring-offset: var(--bg);
+
+  --success: oklch(0.7 0.11 150);
+  --success-strong: oklch(0.78 0.12 150);
+  --success-subtle: oklch(0.245 0.04 150);
+  --success-foreground: oklch(0.15 0.018 31);
+  --success-subtle-foreground: oklch(0.83 0.09 150);
+
+  --warning: oklch(0.78 0.11 75);
+  --warning-strong: oklch(0.82 0.13 75);
+  --warning-subtle: oklch(0.26 0.04 75);
+  --warning-foreground: oklch(0.17 0.018 31);
+  --warning-subtle-foreground: oklch(0.86 0.1 75);
+
+  --danger: oklch(0.67 0.16 20);
+  --danger-strong: oklch(0.74 0.16 20);
+  --danger-subtle: oklch(0.25 0.05 20);
+  --danger-foreground: oklch(0.98 0.004 31);
+  --danger-subtle-foreground: oklch(0.84 0.11 20);
+
+  --neutral-status: oklch(0.7 0.012 31);
+  --neutral-status-subtle: oklch(0.27 0.012 31);
+  --neutral-status-foreground: oklch(0.17 0.018 31);
+  --neutral-status-subtle-foreground: oklch(0.78 0.012 31);
+
+  --shadow-modal-lift:
+    0 8px 24px -8px oklch(0.05 0.01 31 / 0.48), 0 2px 8px -2px oklch(0.05 0.01 31 / 0.28);
+  --shadow-toast: 0 4px 12px -4px oklch(0.05 0.01 31 / 0.4);
+}

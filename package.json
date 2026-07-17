@@ -1,29 +1,41 @@
 {
   "name": "mikconnect",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "frontend",
-    "backend",
-    "desktop"
-  ],
+  "description": "Pilotez vos zones WiFi, vendez plus, gardez le contrôle.",
+  "packageManager": "pnpm@9",
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:frontend": "npm run dev -w frontend",
-    "dev:backend": "npm run dev -w backend",
-    "build": "npm run build -w backend && npm run build -w frontend",
-    "db:generate": "npm run db:generate -w backend",
-    "db:push": "npm run db:push -w backend",
-    "db:migrate": "npm run db:migrate -w backend",
-    "build:netlify": "node scripts/prebuild-netlify.js && npm run build -w backend && npm run build -w frontend"
+    "dev:web": "pnpm --filter @mikconnect/web dev",
+    "dev:api": "pnpm --filter @mikconnect/api dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @mikconnect/e2e test:e2e",
+    "test:e2e:visual": "pnpm --filter @mikconnect/e2e test:e2e:visual",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,css}\" --ignore-path .prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,css}\" --ignore-path .prettierignore",
+    "db:generate": "pnpm --filter @mikconnect/api prisma generate",
+    "db:migrate": "pnpm --filter @mikconnect/api prisma migrate dev",
+    "db:seed": "pnpm --filter @mikconnect/api prisma db seed",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "concurrently": "^8.2.2",
-    "playwright": "^1.61.1"
+    "husky": "9",
+    "lint-staged": "15",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
   },
-  "dependencies": {
-    "@netlify/functions": "^5.3.0",
-    "framer-motion": "^12.42.0",
-    "serverless-http": "^4.0.0"
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "js-yaml": "4.2.0",
+      "lodash": "4.18.1",
+      "multer": "2.2.0",
+      "postcss": "8.5.19",
+      "qs": "6.15.3"
+    }
   }
 }

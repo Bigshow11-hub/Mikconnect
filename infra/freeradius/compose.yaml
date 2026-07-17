@@ -1,0 +1,25 @@
+services:
+  freeradius:
+    image: freeradius/freeradius-server:3.2.8-alpine
+    restart: unless-stopped
+    command: ["radiusd", "-f", "-l", "stdout"]
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    environment:
+      RADIUS_DB_HOST: ${RADIUS_DB_HOST}
+      RADIUS_DB_PORT: ${RADIUS_DB_PORT:-5432}
+      RADIUS_DB_NAME: ${RADIUS_DB_NAME}
+      RADIUS_DB_USER: ${RADIUS_DB_USER}
+      RADIUS_DB_PASSWORD: ${RADIUS_DB_PASSWORD}
+      RADIUS_CLIENT_NETWORK: ${RADIUS_CLIENT_NETWORK:-10.0.0.0/8}
+      RADIUS_CLIENT_SECRET: ${RADIUS_CLIENT_SECRET}
+    volumes:
+      - ./mods-enabled/sql:/etc/raddb/mods-enabled/sql:ro
+      - ./clients.conf:/etc/raddb/clients.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "radiusd -XC >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+

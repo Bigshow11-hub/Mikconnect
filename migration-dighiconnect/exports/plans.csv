@@ -1,6 +1,0 @@
-mik_id,name,type,duration_minutes,price,bandwidth,isActive,hotspotId,hotspot_name,createdAt
-6ca042d2-f44a-4384-9ef6-effbb75269fb,5 heures,HOURLY,300,3000,↓Illimité / ↑Illimité,true,7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,2026-06-29T02:17:53.014Z
-e4fa1a5f-42a7-4d1b-bd73-22f9ec6e6d7f,24 heures,DAILY,1440,5000,↓Illimité / ↑Illimité,true,7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,2026-06-29T02:17:53.038Z
-9b661a8d-224e-4798-b958-15aac870c10c,3 jours,DAILY,4320,10000,↓Illimité / ↑Illimité,true,7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,2026-06-29T02:17:53.057Z
-b3265014-cd7c-4fbc-be7b-d9fff09bebf5,1 semaine,WEEKLY,10080,20000,↓Illimité / ↑Illimité,true,7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,2026-06-29T02:17:53.074Z
-7e2f5bc2-51fb-4d4f-bc10-42262f69aa68,1 mois,MONTHLY,43200,70000,↓Illimité / ↑Illimité,true,7cb71057-768a-4d6c-b171-8427e4eecde2,KOLIA WIFI ZONE,2026-06-29T02:17:53.092Z
