@@ -1,0 +1,25 @@
+{
+  "Navigation": {
+    "overview": "Overview",
+    "online": "Online users",
+    "tickets": "Tickets",
+    "agents": "Agents",
+    "network": "WiFi network",
+    "payments": "Payments",
+    "reports": "Reports",
+    "settings": "Settings",
+    "help": "Help and support",
+    "logout": "Sign out"
+  },
+  "Reports": {
+    "title": "Reports",
+    "description": "Revenue, commissions, channels, plans and network usage for one period.",
+    "period": "Period",
+    "revenue": "Revenue",
+    "netRevenue": "Net revenue",
+    "sales": "Sales",
+    "dataUsed": "Data used",
+    "downloadPdf": "PDF report",
+    "downloadCsv": "Accounting CSV"
+  }
+}

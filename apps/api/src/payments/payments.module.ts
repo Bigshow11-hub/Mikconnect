@@ -7,6 +7,6 @@ import { SmsService } from "./sms.service";
 @Module({
   controllers: [PaymentsController, PublicPaymentsController],
   providers: [PaymentsService, CinetpayService, SmsService],
-  exports: [PaymentsService],
+  exports: [PaymentsService, SmsService],
 })
 export class PaymentsModule {}

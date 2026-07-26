@@ -48,6 +48,7 @@ jobs:
         env:
           # Pas de DB requise pour le build (Prisma generate seul).
           DATABASE_URL: "postgresql://placeholder@localhost:5432/placeholder"
+          NEXT_PUBLIC_API_URL: "https://api.build.mikconnect.invalid"
 
       - name: Test
         run: pnpm test

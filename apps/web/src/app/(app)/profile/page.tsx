@@ -7,6 +7,7 @@ import {
   Badge,
   Building2,
   Button,
+  Download,
   Input,
   Label,
   Palette,
@@ -18,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { authApi } from "@/features/auth/api";
 import { useAuthStore } from "@/features/auth/store";
 import { useAuth } from "@/features/auth/use-auth";
+import { apiBlob } from "@/lib/api";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -25,6 +27,27 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [tenantName, setTenantName] = useState("");
+  const [exportingData, setExportingData] = useState(false);
+
+  async function exportPersonalData() {
+    setExportingData(true);
+    try {
+      const blob = await apiBlob("/privacy/export");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `mikconnect-donnees-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Archive de données téléchargée");
+    } catch (error) {
+      toast.error("Export impossible", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setExportingData(false);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -58,7 +81,9 @@ export default function ProfilePage() {
     mutation.mutate({
       name: name.trim(),
       phone: phone.trim(),
-      ...(user?.role === "OWNER" || user?.role === "ADMIN" ? { tenantName: tenantName.trim() } : {}),
+      ...(user?.role === "OWNER" || user?.role === "ADMIN"
+        ? { tenantName: tenantName.trim() }
+        : {}),
     });
   }
 
@@ -74,7 +99,9 @@ export default function ProfilePage() {
             Gardez vos coordonnées, votre espace de travail et votre affichage à jour.
           </p>
         </div>
-        <Badge tone="success"><ShieldCheck /> Session sécurisée</Badge>
+        <Badge tone="success">
+          <ShieldCheck /> Session sécurisée
+        </Badge>
       </div>
 
       <div className="flex items-center gap-4 border-b border-border py-7">
@@ -98,12 +125,30 @@ export default function ProfilePage() {
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Nom complet" htmlFor="profile-name">
-              <Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={80} required />
+              <Input
+                id="profile-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                minLength={2}
+                maxLength={80}
+                required
+              />
             </Field>
             <Field label="Téléphone" htmlFor="profile-phone">
-              <Input id="profile-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+224 6XX XX XX XX" maxLength={30} />
+              <Input
+                id="profile-phone"
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="+224 6XX XX XX XX"
+                maxLength={30}
+              />
             </Field>
-            <Field label="Adresse email" htmlFor="profile-email" hint="L’adresse de connexion ne se modifie pas ici.">
+            <Field
+              label="Adresse email"
+              htmlFor="profile-email"
+              hint="L’adresse de connexion ne se modifie pas ici."
+            >
               <Input id="profile-email" value={user?.email ?? ""} disabled />
             </Field>
           </div>
@@ -116,10 +161,21 @@ export default function ProfilePage() {
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Nom de l’espace" htmlFor="tenant-name">
-              <Input id="tenant-name" value={tenantName} onChange={(event) => setTenantName(event.target.value)} minLength={2} maxLength={80} required disabled={user?.role === "AGENT"} />
+              <Input
+                id="tenant-name"
+                value={tenantName}
+                onChange={(event) => setTenantName(event.target.value)}
+                minLength={2}
+                maxLength={80}
+                required
+                disabled={user?.role === "AGENT"}
+              />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <ReadOnlyMetric label="Pays" value={user?.tenant.country === "GN" ? "Guinée" : "Côte d’Ivoire"} />
+              <ReadOnlyMetric
+                label="Pays"
+                value={user?.tenant.country === "GN" ? "Guinée" : "Côte d’Ivoire"}
+              />
               <ReadOnlyMetric label="Devise" value={user?.tenant.currency ?? "—"} />
             </div>
           </div>
@@ -133,11 +189,37 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between gap-5 rounded-lg bg-surface-2 px-4 py-3.5">
             <div>
               <p className="text-sm font-medium text-ink">Thème de l’interface</p>
-              <p className="mt-0.5 text-xs text-muted">Clair au soleil, sombre pour la gestion nocturne.</p>
+              <p className="mt-0.5 text-xs text-muted">
+                Clair au soleil, sombre pour la gestion nocturne.
+              </p>
             </div>
             <ThemeToggle />
           </div>
         </SettingsSection>
+
+        {user?.role === "OWNER" ? (
+          <SettingsSection
+            icon={<ShieldCheck />}
+            title="Données personnelles"
+            description="Téléchargez une copie structurée des données personnelles conservées dans votre espace."
+          >
+            <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-bg p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-[58ch] text-xs leading-5 text-muted">
+                L’export contient les profils, paiements et sessions, sans mots de passe, secrets
+                routeur ni jetons.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={exportingData}
+                onClick={() => void exportPersonalData()}
+              >
+                <Download />
+                {exportingData ? "Préparation…" : "Exporter mes données"}
+              </Button>
+            </div>
+          </SettingsSection>
+        ) : null}
 
         <div className="flex justify-end py-6">
           <Button type="submit" disabled={mutation.isPending || !name.trim() || !tenantName.trim()}>
@@ -163,7 +245,9 @@ function SettingsSection({
   return (
     <section className="grid gap-5 py-7 md:grid-cols-[240px_minmax(0,1fr)] md:gap-10">
       <div className="flex gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted-strong [&>svg]:size-[18px]">{icon}</span>
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted-strong [&>svg]:size-[18px]">
+          {icon}
+        </span>
         <div>
           <h2 className="text-sm font-semibold text-ink">{title}</h2>
           <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
@@ -174,7 +258,17 @@ function SettingsSection({
   );
 }
 
-function Field({ label, htmlFor, hint, children }: { label: string; htmlFor: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <Label htmlFor={htmlFor}>{label}</Label>

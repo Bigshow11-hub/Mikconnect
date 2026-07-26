@@ -9,7 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Res,
-  Delete,
+  Headers,
 } from "@nestjs/common";
 import type { Response } from "express";
 import { Role } from "@prisma/client";
@@ -20,7 +20,13 @@ import { Roles } from "../common/decorators/roles.decorator";
 import { CurrentUser, type AuthUser } from "../common/decorators/current-user.decorator";
 import { TicketsService } from "./tickets.service";
 import { TicketsPdfService } from "./tickets-pdf.service";
-import { ExportTicketsPdfDto, GenerateBatchDto, TicketFiltersDto } from "./dto/tickets.dto";
+import {
+  ExportTicketsPdfDto,
+  GenerateBatchDto,
+  TicketBatchFiltersDto,
+  TicketBatchPdfQueryDto,
+  TicketFiltersDto,
+} from "./dto/tickets.dto";
 
 /**
  * TicketsController — mikconnect.
@@ -44,8 +50,12 @@ export class TicketsController {
   @Post("batch")
   @Roles(Role.OWNER)
   @HttpCode(HttpStatus.CREATED)
-  generateBatch(@CurrentUser() user: AuthUser, @Body() dto: GenerateBatchDto) {
-    return this.tickets.generateBatch(user.tenantId, dto);
+  generateBatch(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: GenerateBatchDto,
+    @Headers("idempotency-key") idempotencyKey?: string,
+  ) {
+    return this.tickets.generateBatch(user.tenantId, user.sub, dto, idempotencyKey);
   }
 
   @Get()
@@ -62,14 +72,53 @@ export class TicketsController {
 
   @Get("batches")
   @Roles(Role.OWNER)
-  findBatches(@CurrentUser() user: AuthUser) {
-    return this.tickets.findBatches(user.tenantId);
+  findBatches(@CurrentUser() user: AuthUser, @Query() filters: TicketBatchFiltersDto) {
+    return this.tickets.findBatches(user.tenantId, filters);
   }
 
-  @Delete("batches/:id")
+  @Get("batches/:id/pdf")
   @Roles(Role.OWNER)
-  deleteBatch(@CurrentUser() user: AuthUser, @Param("id") id: string) {
-    return this.tickets.deleteBatch(user.tenantId, id);
+  async exportBatchPdf(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Query() query: TicketBatchPdfQueryDto,
+    @Res() response: Response,
+  ) {
+    const result = await this.ticketsPdf.createVoucherSheetForBatch(
+      user.tenantId,
+      user.sub,
+      id,
+      query.layout,
+    );
+    response.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="mikconnect-lot-${result.reference}-${result.date}.pdf"`,
+      "Content-Length": String(result.pdf.length),
+    });
+    response.send(result.pdf);
+  }
+
+  @Get("batches/:id")
+  @Roles(Role.OWNER)
+  findBatch(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.tickets.findBatch(user.tenantId, id, Number(limit) || 100, Number(offset) || 0);
+  }
+
+  @Post("batches/:id/cancel")
+  @Roles(Role.OWNER)
+  cancelBatch(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.tickets.cancelBatch(user.tenantId, user.sub, id);
+  }
+
+  @Post("batches/:id/retry")
+  @Roles(Role.OWNER)
+  retryBatch(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.tickets.retryBatch(user.tenantId, id, user.sub);
   }
 
   @Get("overview")

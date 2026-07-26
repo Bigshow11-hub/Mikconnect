@@ -41,6 +41,10 @@ export interface TokenPair {
   expiresIn: number;
 }
 
+export interface AuthSession extends TokenPair {
+  user: AuthUser;
+}
+
 export interface LoginInput {
   email: string;
   password: string;

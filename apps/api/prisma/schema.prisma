@@ -40,6 +40,20 @@ enum TicketStatus {
   CANCELLED
 }
 
+enum TicketProvisioningStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum OutboxStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  FAILED
+  DEAD
+}
+
 enum SalesChannel {
   AGENT
   MOBILE_MONEY
@@ -104,6 +118,7 @@ model Tenant {
   radiusCredentials RadiusCredential[]
   subscription      Subscription?
   auditLogs         AuditLog[]
+  monitoringLinks   MonitoringLink[]
 }
 
 model User {
@@ -152,8 +167,9 @@ model Zone {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  routers Router[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routers         Router[]
+  monitoringLinks MonitoringLink[]
 
   @@index([tenantId])
 }
@@ -223,18 +239,22 @@ model Agent {
 }
 
 model Ticket {
-  id        String       @id @default(cuid())
-  tenantId  String
-  code      String       @unique
-  planId    String
-  agentId   String?
-  batchId   String?
-  saleId    String?
-  status    TicketStatus @default(ISSUED)
-  createdAt DateTime     @default(now())
-  soldAt    DateTime?
-  usedAt    DateTime?
-  expiresAt DateTime?
+  id                 String                   @id @default(cuid())
+  tenantId           String
+  code               String                   @unique
+  planId             String
+  agentId            String?
+  batchId            String?
+  saleId             String?
+  status             TicketStatus             @default(ISSUED)
+  createdAt          DateTime                 @default(now())
+  soldAt             DateTime?
+  usedAt             DateTime?
+  expiresAt          DateTime?
+  provisioningStatus TicketProvisioningStatus @default(PENDING)
+  pushedAt           DateTime?
+  pushAttempts       Int                      @default(0)
+  lastPushError      String?
 
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plan             Plan              @relation(fields: [planId], references: [id])
@@ -249,22 +269,30 @@ model Ticket {
   @@index([status])
   @@index([agentId])
   @@index([batchId])
+  @@index([tenantId, provisioningStatus])
 }
 
 model TicketBatch {
-  id         String   @id @default(cuid())
-  tenantId   String
-  planId     String
-  agentId    String?
-  quantity   Int
-  codeLength Int
-  createdAt  DateTime @default(now())
+  id                String    @id @default(cuid())
+  tenantId          String
+  reference         String
+  planId            String
+  agentId           String?
+  createdByUserId   String?
+  idempotencyKey    String?
+  quantity          Int
+  codeLength        Int
+  createdAt         DateTime  @default(now())
+  cancelledAt       DateTime?
+  cancelledByUserId String?
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plan    Plan     @relation(fields: [planId], references: [id])
   agent   Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
   tickets Ticket[]
 
+  @@unique([tenantId, reference])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId])
   @@index([createdAt])
 }
@@ -438,4 +466,54 @@ model AuditLog {
 
   @@index([tenantId])
   @@index([createdAt])
+}
+
+// Liens de consultation externes. Le token brut n'est jamais stocke : sa
+// copie rechiffree sert a reafficher le lien au proprietaire et son hash a
+// authentifier les lectures publiques.
+model MonitoringLink {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  zoneId             String?
+  name               String
+  tokenHash          String    @unique
+  tokenEncrypted     String
+  includeRevenue     Boolean   @default(true)
+  includeTicketStats Boolean   @default(true)
+  includeNetwork     Boolean   @default(true)
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  lastAccessedAt     DateTime?
+  createdByUserId    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  zone   Zone?  @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, revokedAt])
+  @@index([zoneId])
+}
+
+// File transactionnelle interne. Cette table n'est pas exposée aux tenants :
+// elle est consommée uniquement par le dispatcher BullMQ de l'API.
+model OutboxEvent {
+  id           String       @id @default(cuid())
+  tenantId     String
+  type         String
+  aggregateId  String
+  payload      Json
+  status       OutboxStatus @default(PENDING)
+  attempts     Int          @default(0)
+  availableAt  DateTime     @default(now())
+  dispatchedAt DateTime?
+  completedAt  DateTime?
+  lastError    String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([type, aggregateId])
+  @@index([status, availableAt])
+  @@index([tenantId, createdAt])
 }

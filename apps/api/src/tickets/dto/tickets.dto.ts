@@ -85,3 +85,56 @@ export class ExportTicketsPdfDto {
   @IsIn(["A4_STANDARD", "A4_COMPACT"])
   layout?: "A4_STANDARD" | "A4_COMPACT";
 }
+
+export class TicketBatchFiltersDto {
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  planId?: string;
+
+  @IsOptional()
+  @IsString()
+  agentId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
+  @IsIn(["ACTIVE", "CANCELLED"])
+  state?: "ACTIVE" | "CANCELLED";
+
+  @IsOptional()
+  @IsIn(["PENDING", "SYNCED", "FAILED"])
+  provisioningStatus?: "PENDING" | "SYNCED" | "FAILED";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+
+  @IsOptional()
+  @IsIn(["asc", "desc"])
+  sort?: "asc" | "desc";
+}
+
+export class TicketBatchPdfQueryDto {
+  @IsOptional()
+  @IsIn(["A4_STANDARD", "A4_COMPACT"])
+  layout?: "A4_STANDARD" | "A4_COMPACT";
+}

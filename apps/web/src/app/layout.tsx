@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { NextIntlClientProvider } from "next-intl";
 
 import { Toaster } from "@mikconnect/ui";
 import { QueryProvider } from "@/providers/query-provider";
 import { MotionProvider } from "@/providers/motion-provider";
 import { AuthBootstrap } from "@/features/auth/auth-bootstrap";
+import { NetworkStatus } from "@/components/network-status";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,10 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <MotionProvider>
-          <QueryProvider>
-            <AuthBootstrap />
-            {children}
-          </QueryProvider>
+          <NextIntlClientProvider>
+            <QueryProvider>
+              <AuthBootstrap />
+              {children}
+              <NetworkStatus />
+            </QueryProvider>
+          </NextIntlClientProvider>
         </MotionProvider>
         <Toaster />
       </body>

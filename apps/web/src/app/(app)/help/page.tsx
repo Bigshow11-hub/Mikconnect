@@ -4,7 +4,7 @@ import { Button, ChevronRight, CircleHelp, CreditCard, Router, Ticket } from "@m
 
 const guides = [
   {
-    href: "/zones",
+    href: "/network",
     icon: Router,
     title: "Vérifier le réseau WiFi",
     detail: "État du routeur, utilisateurs connectés et actions de session.",

@@ -25,6 +25,7 @@ const buttonVariants = cva(
     "transition-colors duration-200 ease-quint",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&>svg]:shrink-0 [&>svg]:size-[1.25em]",
+    "max-sm:min-h-11 [@media(pointer:coarse)]:min-h-11",
     "select-none",
   ],
   {
@@ -65,8 +66,8 @@ const buttonVariants = cva(
         sm: "h-9 px-3 text-sm",
         md: "h-10 px-4 text-sm",
         lg: "h-12 px-6 text-base",
-        icon: "size-10 p-0",
-        "icon-sm": "size-9 p-0",
+        icon: "size-11 p-0",
+        "icon-sm": "size-11 p-0",
       },
     },
     defaultVariants: {

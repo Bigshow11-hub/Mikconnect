@@ -3,9 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { ClsService } from "nestjs-cls";
 import * as bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { CryptoService } from "../common/crypto.service";
+import { PASSWORD_HASH_ROUNDS, passwordHashNeedsUpgrade } from "../common/password-security";
 import { ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Country, Currency, Role, SubscriptionTier, SubscriptionStatus } from "@prisma/client";
 import type { JwtPayload } from "./strategies/jwt.strategy";
@@ -28,12 +29,32 @@ import { type RegisterDto, type LoginDto, type UpdateProfileDto } from "./dto/au
 const ACCESS_TTL_DEFAULT = "15m";
 const REFRESH_TTL_DAYS = 7;
 const REFRESH_TTL_SECONDS = REFRESH_TTL_DAYS * 24 * 60 * 60;
+const REFRESH_HASH_PREFIX = "sha256:";
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   /** Durée de vie en secondes du refresh — pour le client. */
   expiresIn: number;
+}
+
+export interface AuthProfile {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  role: Role;
+  tenantId: string;
+  tenant: {
+    name: string;
+    country: Country;
+    currency: Currency;
+    tier: SubscriptionTier;
+  };
+}
+
+export interface AuthSession extends TokenPair {
+  user: AuthProfile;
 }
 
 @Injectable()
@@ -91,7 +112,7 @@ export class AuthService {
     // Persiste le refresh hashé. Le bypass RLS est actif pour que le user
     // puisse écrire dans sa propre ligne (RLS sur refresh_token est sur
     // user_id, pas tenant_id — voir schema).
-    const hash = await bcrypt.hash(refreshToken, 10);
+    const hash = hashRefreshToken(refreshToken);
     await this.prisma.withTenantContext((tx) =>
       tx.refreshToken.create({
         data: {
@@ -108,7 +129,7 @@ export class AuthService {
 
   // --- Auth flows ---
 
-  async register(dto: RegisterDto): Promise<TokenPair> {
+  async register(dto: RegisterDto): Promise<AuthSession> {
     const existing = await this.prisma.withTenantContext((tx) =>
       tx.user.findUnique({ where: { email: dto.email }, select: { id: true } }),
     );
@@ -121,7 +142,7 @@ export class AuthService {
     // Création tenant + owner + subscription en une transaction.
     // RLS n'est pas encore actif (pas de tenantId), donc on bypass pour cette
     // transaction d'initialisation.
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
 
     const created = await this.prisma.withTenantContext(async (tx) => {
       this.cls.set("bypassRls", true);
@@ -165,20 +186,42 @@ export class AuthService {
 
     this.logger.log(`Tenant created: ${created.id} (${dto.tenantName}) — owner ${owner.email}`);
 
-    return this.issueTokenPair({
+    const tokens = await this.issueTokenPair({
       id: owner.id,
       tenantId: created.id,
       role: Role.OWNER,
       email: owner.email,
     });
+    return {
+      ...tokens,
+      user: {
+        id: owner.id,
+        email: owner.email,
+        name: owner.name,
+        phone: owner.phone,
+        role: owner.role,
+        tenantId: created.id,
+        tenant: {
+          name: created.name,
+          country: created.country,
+          currency: created.currency,
+          tier: created.tier,
+        },
+      },
+    };
   }
 
-  async login(dto: LoginDto): Promise<TokenPair> {
+  async login(dto: LoginDto): Promise<AuthSession> {
     // Recherche user cross-tenant (login par email global). RLS sur User est
     // par tenant_id, donc on bypass pour la recherche.
     const user = await this.prisma.withTenantContext(async (tx) => {
       this.cls.set("bypassRls", true);
-      return tx.user.findUnique({ where: { email: dto.email } });
+      return tx.user.findUnique({
+        where: { email: dto.email },
+        include: {
+          tenant: { select: { name: true, country: true, currency: true, tier: true } },
+        },
+      });
     });
 
     if (!user) {
@@ -190,15 +233,31 @@ export class AuthService {
       throw new UnauthorizedException("Email ou mot de passe invalide");
     }
 
-    return this.issueTokenPair({
+    if (passwordHashNeedsUpgrade(user.passwordHash)) {
+      this.schedulePasswordHashUpgrade(user.id, user.tenantId, dto.password);
+    }
+
+    const tokens = await this.issueTokenPair({
       id: user.id,
       tenantId: user.tenantId,
       role: user.role,
       email: user.email,
     });
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+        tenantId: user.tenantId,
+        tenant: user.tenant,
+      },
+    };
   }
 
-  async refresh(refreshToken: string): Promise<TokenPair> {
+  async refresh(refreshToken: string): Promise<AuthSession> {
     // 1. Vérifie la signature + expiration.
     let payload: JwtPayload & { jti?: string };
     try {
@@ -216,7 +275,22 @@ export class AuthService {
     // 2. Recherche le refresh en DB. Si absent → déjà utilisé ou révoqué →
     //    possible vol : on invalide toute la famille.
     const stored = await this.prisma.withTenantContext((tx) =>
-      tx.refreshToken.findUnique({ where: { id: payload.jti } }),
+      tx.refreshToken.findUnique({
+        where: { id: payload.jti },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              role: true,
+              tenantId: true,
+              tenant: { select: { name: true, country: true, currency: true, tier: true } },
+            },
+          },
+        },
+      }),
     );
 
     if (!stored || stored.revokedAt) {
@@ -237,7 +311,7 @@ export class AuthService {
     }
 
     // 3. Vérifie le hash (timing-safe).
-    const hashOk = await bcrypt.compare(refreshToken, stored.tokenHash);
+    const hashOk = await verifyRefreshToken(refreshToken, stored.tokenHash);
     if (!hashOk) {
       throw new UnauthorizedException("Refresh token invalide");
     }
@@ -250,12 +324,14 @@ export class AuthService {
       }),
     );
 
-    return this.issueTokenPair({
+    const tokens = await this.issueTokenPair({
       id: payload.sub,
       tenantId: payload.tenantId,
       role: payload.role as Role,
       email: payload.email,
     });
+    const user = stored.user ?? (await this.me(payload.sub));
+    return { ...tokens, user };
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -326,6 +402,37 @@ export class AuthService {
 
     return this.me(userId);
   }
+
+  private schedulePasswordHashUpgrade(userId: string, tenantId: string, password: string) {
+    const timer = setTimeout(() => {
+      void bcrypt
+        .hash(password, PASSWORD_HASH_ROUNDS)
+        .then((passwordHash) =>
+          this.prisma.withExplicitTenantContext(tenantId, (tx) =>
+            tx.user.update({ where: { id: userId, tenantId }, data: { passwordHash } }),
+          ),
+        )
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `Password hash upgrade skipped for user ${userId}: ${error instanceof Error ? error.message : "unknown error"}`,
+          );
+        });
+    }, 15_000);
+    timer.unref();
+  }
+}
+
+function hashRefreshToken(token: string) {
+  return `${REFRESH_HASH_PREFIX}${createHash("sha256").update(token).digest("hex")}`;
+}
+
+async function verifyRefreshToken(token: string, storedHash: string) {
+  if (!storedHash.startsWith(REFRESH_HASH_PREFIX)) {
+    return bcrypt.compare(token, storedHash);
+  }
+  const expected = Buffer.from(storedHash.slice(REFRESH_HASH_PREFIX.length), "hex");
+  const actual = createHash("sha256").update(token).digest();
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 /**

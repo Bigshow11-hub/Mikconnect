@@ -30,14 +30,16 @@ import { ApiError } from "@/lib/api";
 import { routerMonitoringApi } from "./api";
 import type { HotspotActiveUser, RouterOnlineUsers } from "./types";
 
-const REFRESH_INTERVAL_MS = 15_000;
+const REFRESH_INTERVAL_MS = 30_000;
 
 export function OnlineUsersPanel({
   limit = 6,
   dedicated = false,
+  enabled = true,
 }: {
   limit?: number;
   dedicated?: boolean;
+  enabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export function OnlineUsersPanel({
   const query = useQuery({
     queryKey: ["router-online-users"],
     queryFn: routerMonitoringApi.onlineUsers,
+    enabled,
     refetchInterval: REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,
   });
@@ -250,7 +253,7 @@ export function OnlineUsersPanel({
                   {visibleRows.length === 1 ? "" : "s"} sur {filteredRows.length}
                 </p>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/online">Voir toutes les sessions</Link>
+                  <Link href="/network#sessions">Voir toutes les sessions</Link>
                 </Button>
               </div>
             )}
@@ -357,7 +360,7 @@ function SessionCard({
             <p className="truncate font-mono text-sm font-semibold text-ink">
               {user.username || "Accès inconnu"}
             </p>
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success-strong">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-success-strong">
               <span className="size-1.5 rounded-full bg-success" />
               En ligne
             </span>
@@ -371,7 +374,7 @@ function SessionCard({
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
           <div>
             <dt className="text-muted">Adresse MAC</dt>
-            <dd className="mt-1 truncate font-mono text-[11px] text-ink">
+            <dd className="mt-1 truncate font-mono text-xs text-ink">
               {user.macAddress || "Inconnue"}
             </dd>
           </div>
@@ -401,7 +404,7 @@ function SessionCard({
                 {formatBytes(total)}
               </p>
             </div>
-            <p className="text-right text-[10px] text-muted">
+            <p className="text-right text-xs text-muted">
               {humanizeLogin(user.loginBy)}
               <br />
               {router.zone?.name ?? "Sans zone"}
@@ -411,7 +414,7 @@ function SessionCard({
             <span className="bg-primary" style={{ width: `${downloadRatio}%` }} />
             <span className="bg-accent" style={{ width: `${100 - downloadRatio}%` }} />
           </div>
-          <div className="mt-2 flex justify-between gap-3 text-[10px] text-muted">
+          <div className="mt-2 flex justify-between gap-3 text-xs text-muted">
             <span className="inline-flex items-center gap-1">
               <Download className="size-3" />
               {formatBytes(user.bytesOut)}
@@ -474,9 +477,9 @@ function OverviewMetric({
         {icon}
       </span>
       <div className="min-w-0">
-        <dt className="text-[11px] text-muted">{label}</dt>
+        <dt className="text-xs text-muted">{label}</dt>
         <dd className="mt-0.5 font-mono text-lg font-semibold text-ink">{value}</dd>
-        <p className="truncate text-[10px] text-muted">{detail}</p>
+        <p className="truncate text-xs text-muted">{detail}</p>
       </div>
     </div>
   );

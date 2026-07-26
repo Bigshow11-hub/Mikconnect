@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { type CreateZoneDto } from "./dto/zones.dto";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 /**
  * ZonesService — mikconnect.
@@ -11,9 +12,13 @@ import { type CreateZoneDto } from "./dto/zones.dto";
  */
 @Injectable()
 export class ZonesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
+  ) {}
 
   async create(tenantId: string, dto: CreateZoneDto) {
+    await this.subscriptions?.assertCanConsume(tenantId, "zones");
     return this.prisma.withTenantContext((tx) =>
       tx.zone.create({
         data: { tenantId, name: dto.name, location: dto.location },

@@ -13,6 +13,7 @@
     "test": "pnpm -r run test",
     "test:e2e": "pnpm --filter @mikconnect/e2e test:e2e",
     "test:e2e:visual": "pnpm --filter @mikconnect/e2e test:e2e:visual",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,css}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,css}\" --ignore-path .prettierignore",
     "db:generate": "pnpm --filter @mikconnect/api prisma generate",

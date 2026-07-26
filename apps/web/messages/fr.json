@@ -1,0 +1,25 @@
+{
+  "Navigation": {
+    "overview": "Vue d’ensemble",
+    "online": "Utilisateurs en ligne",
+    "tickets": "Tickets",
+    "agents": "Agents",
+    "network": "Réseau WiFi",
+    "payments": "Paiements",
+    "reports": "Rapports",
+    "settings": "Paramètres",
+    "help": "Aide et support",
+    "logout": "Déconnexion"
+  },
+  "Reports": {
+    "title": "Rapports",
+    "description": "Revenus, commissions, canaux, forfaits et consommation réseau regroupés sur une période.",
+    "period": "Période",
+    "revenue": "Revenus",
+    "netRevenue": "Revenu net",
+    "sales": "Ventes",
+    "dataUsed": "Données consommées",
+    "downloadPdf": "Rapport PDF",
+    "downloadCsv": "CSV comptable"
+  }
+}

@@ -1,6 +1,6 @@
 import { config, STORAGE_KEYS } from "./config";
 import { useAuthStore } from "@/features/auth/store";
-import type { TokenPair } from "@/features/auth/types";
+import type { AuthSession } from "@/features/auth/types";
 
 /**
  * Client API — mikconnect.
@@ -28,15 +28,14 @@ export class ApiError extends Error {
   }
 }
 
-let refreshPromise: Promise<TokenPair> | null = null;
+let refreshPromise: Promise<AuthSession> | null = null;
 
 /** Lit le message NestJS standard ({ statusCode, message, error }). */
 function extractMessage(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "message" in body) {
     const msg = (body as { message: unknown }).message;
     if (typeof msg === "string") return msg;
-    if (Array.isArray(msg) && msg.length > 0 && typeof msg[0] === "string")
-      return msg.join(", ");
+    if (Array.isArray(msg) && msg.length > 0 && typeof msg[0] === "string") return msg.join(", ");
   }
   return fallback;
 }
@@ -56,7 +55,7 @@ async function toApiError(res: Response): Promise<ApiError> {
  * Met à jour l'access token en mémoire + le refresh en localStorage.
  * Dédupé les appels concurrents via `refreshPromise`.
  */
-export async function refreshTokens(): Promise<TokenPair> {
+export async function refreshTokens(): Promise<AuthSession> {
   if (refreshPromise) return refreshPromise;
 
   const refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken);
@@ -76,10 +75,10 @@ export async function refreshTokens(): Promise<TokenPair> {
         useAuthStore.getState().clear();
         throw await toApiError(res);
       }
-      const tokens = (await res.json()) as TokenPair;
-      localStorage.setItem(STORAGE_KEYS.refreshToken, tokens.refreshToken);
-      useAuthStore.getState().setAccessToken(tokens.accessToken);
-      return tokens;
+      const session = (await res.json()) as AuthSession;
+      localStorage.setItem(STORAGE_KEYS.refreshToken, session.refreshToken);
+      useAuthStore.getState().setSession(session.accessToken, session.user);
+      return session;
     } finally {
       refreshPromise = null;
     }
@@ -88,10 +87,7 @@ export async function refreshTokens(): Promise<TokenPair> {
   return refreshPromise;
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { accessToken } = useAuthStore.getState();
   const hadAuth = !!accessToken;
 

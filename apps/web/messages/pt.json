@@ -1,0 +1,25 @@
+{
+  "Navigation": {
+    "overview": "Visão geral",
+    "online": "Utilizadores online",
+    "tickets": "Bilhetes",
+    "agents": "Agentes",
+    "network": "Rede WiFi",
+    "payments": "Pagamentos",
+    "reports": "Relatórios",
+    "settings": "Definições",
+    "help": "Ajuda e suporte",
+    "logout": "Terminar sessão"
+  },
+  "Reports": {
+    "title": "Relatórios",
+    "description": "Receitas, comissões, canais, planos e consumo de rede num período.",
+    "period": "Período",
+    "revenue": "Receitas",
+    "netRevenue": "Receita líquida",
+    "sales": "Vendas",
+    "dataUsed": "Dados consumidos",
+    "downloadPdf": "Relatório PDF",
+    "downloadCsv": "CSV contabilístico"
+  }
+}

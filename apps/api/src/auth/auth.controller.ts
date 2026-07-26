@@ -1,5 +1,14 @@
-import { Body, Controller, Post, UseGuards, Get, Patch, HttpCode, HttpStatus } from "@nestjs/common";
-import { AuthService, type TokenPair } from "./auth.service";
+import {
+  Body,
+  Controller,
+  Post,
+  UseGuards,
+  Get,
+  Patch,
+  HttpCode,
+  HttpStatus,
+} from "@nestjs/common";
+import { AuthService, type AuthSession } from "./auth.service";
 import { RegisterDto, LoginDto, RefreshDto, LogoutDto, UpdateProfileDto } from "./dto/auth.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentUser, type AuthUser } from "../common/decorators/current-user.decorator";
@@ -24,21 +33,21 @@ export class AuthController {
   @Post("register")
   @Throttle({ default: { limit: 8, ttl: 60_000 } })
   @HttpCode(HttpStatus.CREATED)
-  register(@Body() dto: RegisterDto): Promise<TokenPair> {
+  register(@Body() dto: RegisterDto): Promise<AuthSession> {
     return this.auth.register(dto);
   }
 
   @Post("login")
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto): Promise<TokenPair> {
+  login(@Body() dto: LoginDto): Promise<AuthSession> {
     return this.auth.login(dto);
   }
 
   @Post("refresh")
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
-  refresh(@Body() dto: RefreshDto): Promise<TokenPair> {
+  refresh(@Body() dto: RefreshDto): Promise<AuthSession> {
     return this.auth.refresh(dto.refreshToken);
   }
 

@@ -17,11 +17,27 @@ test("un propriétaire génère un lot avec des codes compacts de 4 caractères"
   await page.getByRole("button", { name: "Générer le lot" }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(201);
-  const payload = (await response.json()) as { tickets: Array<{ code: string }> };
+  const payload = (await response.json()) as {
+    batchId: string;
+    reference: string;
+    tickets: Array<{ code: string }>;
+  };
   expect(payload.tickets).toHaveLength(3);
   for (const ticket of payload.tickets) expect(ticket.code).toMatch(/^[A-Z0-9]{4}$/);
 
   await expect(page.getByRole("heading", { name: "Lot prêt à être distribué" })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Télécharger le PDF" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toContain(`mikconnect-lot-${payload.reference}`);
+
+  await page.goto("/tickets/batches");
+  const batchRow = page.locator("article").filter({ hasText: payload.reference });
+  await expect(batchRow).toBeVisible();
+  await batchRow.getByRole("button", { name: "Annuler" }).click();
+  await page.getByRole("button", { name: "Annuler les invendus" }).click();
+  await expect(page.getByText("Lot annulé", { exact: true })).toBeVisible();
 });
 
 test("une vente agent est comptabilisée depuis son espace", async ({ page, loginAs }) => {

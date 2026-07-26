@@ -47,19 +47,24 @@ export function RecentSalesStrip() {
       className={`recent-sale-strip border-t border-border bg-surface ${isNewSale ? "recent-sale-strip--fresh" : ""}`}
       aria-label="Tickets récemment vendus"
     >
-      <div className="recent-sale-strip__viewport h-11 overflow-hidden" aria-live="polite">
+      <div className="recent-sale-strip__viewport min-h-11 overflow-x-auto" aria-live="polite">
         <div className="recent-sale-strip__track flex h-full w-max items-center">
           <SalesSequence sales={sales} currency={currency} />
-          <SalesSequence sales={sales} currency={currency} duplicate />
         </div>
       </div>
     </div>
   );
 }
 
-function SalesSequence({ sales, currency, duplicate = false }: { sales: NonNullable<Awaited<ReturnType<typeof ticketsApi.overview>>>["recentSales"]; currency: "XOF" | "GNF"; duplicate?: boolean }) {
+function SalesSequence({
+  sales,
+  currency,
+}: {
+  sales: NonNullable<Awaited<ReturnType<typeof ticketsApi.overview>>>["recentSales"];
+  currency: "XOF" | "GNF";
+}) {
   return (
-    <div className="flex min-w-screen shrink-0 items-center justify-around gap-10 px-6" aria-hidden={duplicate || undefined}>
+    <div className="flex min-w-screen shrink-0 items-center justify-around gap-10 px-6">
       {sales.map((sale) => {
         const channel = sale.channel === "MOBILE_MONEY" ? "Paiement en ligne" : "Vente physique";
         return (

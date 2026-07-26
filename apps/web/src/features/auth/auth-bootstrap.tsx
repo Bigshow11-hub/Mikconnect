@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { STORAGE_KEYS } from "@/lib/config";
 import { refreshTokens } from "@/lib/api";
 
-import { authApi } from "./api";
 import { useAuthStore } from "./store";
 
 /**
@@ -35,10 +34,9 @@ export function AuthBootstrap() {
 
     void (async () => {
       try {
-        await refreshTokens();
-        const me = await authApi.me();
+        const session = await refreshTokens();
         if (active) {
-          useAuthStore.getState().setSession(useAuthStore.getState().accessToken!, me);
+          useAuthStore.getState().setSession(session.accessToken, session.user);
         }
       } catch {
         localStorage.removeItem(STORAGE_KEYS.refreshToken);

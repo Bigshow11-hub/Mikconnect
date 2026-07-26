@@ -12,12 +12,14 @@ import type { LoginInput, RegisterInput } from "./types";
  */
 
 /** Persiste le refresh token + installe la session (access + user). */
-async function installSession(tokens: { accessToken: string; refreshToken: string }) {
-  localStorage.setItem(STORAGE_KEYS.refreshToken, tokens.refreshToken);
-  useAuthStore.getState().setAccessToken(tokens.accessToken);
-  const user = await authApi.me();
-  useAuthStore.getState().setSession(tokens.accessToken, user);
-  return user;
+async function installSession(session: {
+  accessToken: string;
+  refreshToken: string;
+  user: Awaited<ReturnType<typeof authApi.me>>;
+}) {
+  localStorage.setItem(STORAGE_KEYS.refreshToken, session.refreshToken);
+  useAuthStore.getState().setSession(session.accessToken, session.user);
+  return session.user;
 }
 
 export async function login(input: LoginInput) {

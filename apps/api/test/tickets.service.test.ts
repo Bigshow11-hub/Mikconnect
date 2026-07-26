@@ -62,6 +62,7 @@ function makePrismaMock(
   } = opts;
 
   const ticketsStore: Record<string, unknown>[] = [];
+  let batchStore: Record<string, unknown> | null = null;
   const plan = planExists
     ? {
         id: "plan-1",
@@ -76,12 +77,33 @@ function makePrismaMock(
     : null;
 
   const txMock = {
-    ticketBatch: {
+    outboxEvent: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-        id: "batch-1",
+        id: "outbox-1",
         ...data,
-        createdAt: new Date(),
       })),
+      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "outbox-1",
+        ...data,
+      })),
+    },
+    auditLog: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "audit-1",
+        ...data,
+      })),
+    },
+    ticketBatch: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        batchStore = { id: "batch-1", ...data, createdAt: new Date() };
+        return batchStore;
+      }),
+      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        if (!batchStore) return null;
+        if (where.id && where.id !== batchStore.id) return null;
+        if (where.idempotencyKey && where.idempotencyKey !== batchStore.idempotencyKey) return null;
+        return { ...batchStore, tickets: ticketsStore };
+      }),
     },
     radiusCredential: {
       createMany: vi.fn(async () => ({ count: ticketsStore.length })),
@@ -90,11 +112,10 @@ function makePrismaMock(
       findUnique: vi.fn(async () => (planExists ? { ...plan, active: planActive } : null)),
     },
     agent: {
-      findUnique: vi.fn(async () =>
-        agentExists ? { id: "agent-1", active: agentActive } : null,
-      ),
+      findUnique: vi.fn(async () => (agentExists ? { id: "agent-1", active: agentActive } : null)),
     },
     ticket: {
+      updateMany: vi.fn(async () => ({ count: ticketsStore.length })),
       createManyAndReturn: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => {
         const created = data.map((d) => ({
           id: `ticket-${Math.random().toString(36).slice(2, 8)}`,
@@ -104,21 +125,29 @@ function makePrismaMock(
         ticketsStore.push(...created);
         return created;
       }),
-      findMany: vi.fn(async ({ where, take, skip }: { where?: Record<string, unknown>; take?: number; skip?: number }) => {
-        let result = ticketsStore.slice();
-        if (where?.status) result = result.filter((t) => t.status === where.status);
-        if (where?.code?.contains) {
-          const q = String(where.code.contains).toLowerCase();
-          result = result.filter((t) => String(t.code).toLowerCase().includes(q));
-        }
-        const offset = skip ?? 0;
-        const limit = take ?? 50;
-        return result.slice(offset, offset + limit);
-      }),
+      findMany: vi.fn(
+        async ({
+          where,
+          take,
+          skip,
+        }: {
+          where?: Record<string, unknown>;
+          take?: number;
+          skip?: number;
+        }) => {
+          let result = ticketsStore.slice();
+          if (where?.status) result = result.filter((t) => t.status === where.status);
+          if (where?.code?.contains) {
+            const q = String(where.code.contains).toLowerCase();
+            result = result.filter((t) => String(t.code).toLowerCase().includes(q));
+          }
+          const offset = skip ?? 0;
+          const limit = take ?? 50;
+          return result.slice(offset, offset + limit);
+        },
+      ),
       count: vi.fn(async () => ticketsStore.length),
-      groupBy: vi.fn(async () => [
-        { status: TicketStatus.ISSUED, _count: ticketsStore.length },
-      ]),
+      groupBy: vi.fn(async () => [{ status: TicketStatus.ISSUED, _count: ticketsStore.length }]),
     },
     router: {
       findFirst: vi.fn(async () =>
@@ -156,7 +185,7 @@ describe("TicketsService", () => {
       const prisma = makePrismaMock(crypto);
       const service = new TicketsService(prisma, crypto, connector);
 
-      const result = await service.generateBatch("tenant-1", {
+      const result = await service.generateBatch("tenant-1", "user-1", {
         planId: "plan-1",
         quantity: 3,
       });
@@ -172,7 +201,7 @@ describe("TicketsService", () => {
       const service = new TicketsService(prisma, crypto, connector);
 
       await expect(
-        service.generateBatch("tenant-1", { planId: "ghost", quantity: 5 }),
+        service.generateBatch("tenant-1", "user-1", { planId: "ghost", quantity: 5 }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -181,7 +210,7 @@ describe("TicketsService", () => {
       const service = new TicketsService(prisma, crypto, connector);
 
       await expect(
-        service.generateBatch("tenant-1", { planId: "plan-1", quantity: 5 }),
+        service.generateBatch("tenant-1", "user-1", { planId: "plan-1", quantity: 5 }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -190,7 +219,11 @@ describe("TicketsService", () => {
       const service = new TicketsService(prisma, crypto, connector);
 
       await expect(
-        service.generateBatch("tenant-1", { planId: "plan-1", quantity: 5, agentId: "ghost" }),
+        service.generateBatch("tenant-1", "user-1", {
+          planId: "plan-1",
+          quantity: 5,
+          agentId: "ghost",
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -198,7 +231,7 @@ describe("TicketsService", () => {
       const prisma = makePrismaMock(crypto, { routerOnline: false });
       const service = new TicketsService(prisma, crypto, connector);
 
-      const result = await service.generateBatch("tenant-1", {
+      const result = await service.generateBatch("tenant-1", "user-1", {
         planId: "plan-1",
         quantity: 2,
       });
@@ -206,6 +239,29 @@ describe("TicketsService", () => {
       expect(result.tickets).toHaveLength(2);
       expect(result.push.ok).toBe(false);
       expect(result.push.pushed).toBe(0);
+    });
+
+    it("rejoue la réponse sans créer de doublon avec la même clé d'idempotence", async () => {
+      const prisma = makePrismaMock(crypto);
+      const service = new TicketsService(prisma, crypto, connector);
+
+      const first = await service.generateBatch(
+        "tenant-1",
+        "user-1",
+        { planId: "plan-1", quantity: 3 },
+        "stable-request-key",
+      );
+      const replay = await service.generateBatch(
+        "tenant-1",
+        "user-1",
+        { planId: "plan-1", quantity: 3 },
+        "stable-request-key",
+      );
+
+      expect(first.replayed).toBe(false);
+      expect(replay.replayed).toBe(true);
+      expect(replay.batchId).toBe(first.batchId);
+      expect(replay.tickets).toHaveLength(3);
     });
   });
 
@@ -215,7 +271,7 @@ describe("TicketsService", () => {
       const service = new TicketsService(prisma, crypto, connector);
 
       // Pré-remplit quelques tickets.
-      await service.generateBatch("tenant-1", { planId: "plan-1", quantity: 3 });
+      await service.generateBatch("tenant-1", "user-1", { planId: "plan-1", quantity: 3 });
 
       const result = await service.findAll("tenant-1", {});
       expect(result.tickets.length).toBe(3);
@@ -226,7 +282,7 @@ describe("TicketsService", () => {
       const prisma = makePrismaMock(crypto);
       const service = new TicketsService(prisma, crypto, connector);
 
-      await service.generateBatch("tenant-1", { planId: "plan-1", quantity: 3 });
+      await service.generateBatch("tenant-1", "user-1", { planId: "plan-1", quantity: 3 });
 
       const result = await service.findAll("tenant-1", { status: TicketStatus.ISSUED });
       expect(result.tickets.length).toBe(3);

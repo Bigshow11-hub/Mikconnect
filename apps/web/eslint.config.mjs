@@ -15,7 +15,7 @@ const nextConfigs = compat.extends("next/core-web-vitals", "next/typescript");
 const config = [
   ...base,
   // next-env.d.ts est généré par Next.js : on ne le lint pas.
-  { ignores: ["next-env.d.ts", ".next/**"] },
+  { ignores: ["next-env.d.ts", ".next/**", ".next-dev/**"] },
   // eslint-config-next (legacy) traduit en flat via compat.
   ...nextConfigs,
   {

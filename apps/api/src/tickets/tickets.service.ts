@@ -1,5 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
-import { Prisma, TicketStatus, SalesChannel } from "@prisma/client";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  Optional,
+} from "@nestjs/common";
+import { Prisma, TicketProvisioningStatus, TicketStatus, SalesChannel } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CryptoService } from "../common/crypto.service";
 import {
@@ -7,8 +14,9 @@ import {
   type HotspotUserInput,
   type RouterTestInput,
 } from "../routers/mikrotik-connector.service";
-import { generateUniqueCodes } from "./ticket-code.util";
-import type { GenerateBatchDto, TicketFiltersDto } from "./dto/tickets.dto";
+import { generateBatchReference, generateUniqueCodes } from "./ticket-code.util";
+import type { GenerateBatchDto, TicketBatchFiltersDto, TicketFiltersDto } from "./dto/tickets.dto";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 /**
  * TicketsService — mikconnect.
@@ -35,9 +43,39 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly connector: MikrotikConnectorService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
   ) {}
 
-  async generateBatch(tenantId: string, dto: GenerateBatchDto) {
+  private withTenant<T>(
+    tenantId: string,
+    systemContext: boolean,
+    operation: (tx: PrismaClient) => Promise<T>,
+  ) {
+    return systemContext
+      ? this.prisma.withExplicitTenantContext(tenantId, operation)
+      : this.prisma.withTenantContext(operation);
+  }
+
+  async generateBatch(
+    tenantId: string,
+    userId: string,
+    dto: GenerateBatchDto,
+    idempotencyKey?: string,
+  ) {
+    const normalizedKey = idempotencyKey?.trim() || undefined;
+    if (normalizedKey && normalizedKey.length > 128) {
+      throw new BadRequestException("La clé d'idempotence ne peut pas dépasser 128 caractères.");
+    }
+    if (normalizedKey) {
+      const existing = await this.prisma.withTenantContext((tx) =>
+        tx.ticketBatch.findFirst({
+          where: { tenantId, idempotencyKey: normalizedKey },
+          select: { id: true },
+        }),
+      );
+      if (existing) return this.batchGenerationResult(tenantId, existing.id, true);
+    }
+    await this.subscriptions?.assertCanConsume(tenantId, "tickets", dto.quantity);
     // 1. Valide le plan.
     const plan = await this.prisma.withTenantContext((tx) =>
       tx.plan.findUnique({ where: { id: dto.planId } }),
@@ -64,8 +102,11 @@ export class TicketsService {
       const batch = await tx.ticketBatch.create({
         data: {
           tenantId,
+          reference: generateBatchReference(),
           planId: plan.id,
           agentId: dto.agentId ?? null,
+          createdByUserId: userId,
+          idempotencyKey: normalizedKey,
           quantity: dto.quantity,
           codeLength,
         },
@@ -92,6 +133,24 @@ export class TicketsService {
             plan.dataLimitMb == null ? null : BigInt(plan.dataLimitMb) * 1024n * 1024n,
         })),
       });
+      await tx.outboxEvent.create({
+        data: {
+          tenantId,
+          type: "TICKET_BATCH_SYNC",
+          aggregateId: batch.id,
+          payload: { batchId: batch.id, tenantId },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: "TICKET_BATCH_CREATED",
+          resource: "TicketBatch",
+          resourceId: batch.id,
+          metadata: { reference: batch.reference, quantity: dto.quantity, planId: plan.id },
+        },
+      });
       return { batch, tickets };
     });
 
@@ -105,9 +164,21 @@ export class TicketsService {
       plan,
       tickets.map((t) => t.id),
     );
+    await this.prisma.outboxEvent.update({
+      where: { type_aggregateId: { type: "TICKET_BATCH_SYNC", aggregateId: batch.id } },
+      data: pushResult.ok
+        ? { status: "COMPLETED", completedAt: new Date(), lastError: null }
+        : {
+            status: "PENDING",
+            availableAt: new Date(Date.now() + 30_000),
+            lastError: pushResult.message,
+          },
+    });
 
     return {
       batchId: batch.id,
+      reference: batch.reference,
+      replayed: false,
       tickets: tickets.map((t) => ({
         id: t.id,
         code: t.code,
@@ -120,43 +191,207 @@ export class TicketsService {
     };
   }
 
-  async findBatches(tenantId: string) {
-    return this.prisma.withTenantContext((tx) =>
-      tx.ticketBatch.findMany({
-        where: { tenantId },
-        select: {
-          id: true,
-          quantity: true,
-          codeLength: true,
-          createdAt: true,
-          plan: { select: { id: true, name: true, durationMinutes: true } },
-          agent: { select: { id: true, user: { select: { name: true } } } },
-          tickets: {
-            select: { id: true, status: true },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-    );
-  }
-
-  async deleteBatch(tenantId: string, batchId: string) {
+  private async batchGenerationResult(tenantId: string, batchId: string, replayed: boolean) {
     const batch = await this.prisma.withTenantContext((tx) =>
       tx.ticketBatch.findFirst({
         where: { id: batchId, tenantId },
-        select: { id: true, tickets: { select: { status: true } } },
+        select: {
+          id: true,
+          reference: true,
+          tickets: {
+            select: {
+              id: true,
+              code: true,
+              planId: true,
+              status: true,
+              expiresAt: true,
+              createdAt: true,
+              provisioningStatus: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
       }),
     );
     if (!batch) throw new NotFoundException("Lot de tickets introuvable.");
-    if (batch.tickets.some((ticket) => ticket.status !== TicketStatus.ISSUED)) {
-      throw new BadRequestException(
-        "Ce lot contient des tickets vendus ou utilisés et doit être conservé pour l’historique comptable.",
-      );
-    }
+    const synced = batch.tickets.filter((ticket) => ticket.provisioningStatus === "SYNCED").length;
+    const failed = batch.tickets.filter((ticket) => ticket.provisioningStatus === "FAILED").length;
+    return {
+      batchId: batch.id,
+      reference: batch.reference,
+      replayed,
+      tickets: batch.tickets,
+      push: {
+        ok: synced === batch.tickets.length,
+        pushed: synced,
+        failed,
+        pending: batch.tickets.length - synced - failed,
+        message: "Ce lot avait déjà été créé. Aucun doublon n'a été généré.",
+      },
+    };
+  }
 
-    await this.prisma.withTenantContext((tx) => tx.ticketBatch.delete({ where: { id: batch.id } }));
-    return { deleted: true, id: batch.id };
+  async findBatches(tenantId: string, filters: TicketBatchFiltersDto = {}) {
+    const limit = filters.limit ?? 20;
+    const offset = filters.offset ?? 0;
+    const where: Prisma.TicketBatchWhereInput = {
+      tenantId,
+      ...(filters.q ? { reference: { contains: filters.q, mode: "insensitive" } } : {}),
+      ...(filters.planId ? { planId: filters.planId } : {}),
+      ...(filters.agentId ? { agentId: filters.agentId } : {}),
+      ...(filters.state === "ACTIVE" ? { cancelledAt: null } : {}),
+      ...(filters.state === "CANCELLED" ? { cancelledAt: { not: null } } : {}),
+      ...(filters.provisioningStatus
+        ? { tickets: { some: { provisioningStatus: filters.provisioningStatus } } }
+        : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: new Date(filters.from) } : {}),
+              ...(filters.to ? { lte: new Date(filters.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const [batches, total] = await Promise.all([
+      this.prisma.withTenantContext((tx) =>
+        tx.ticketBatch.findMany({
+          where,
+          select: {
+            id: true,
+            reference: true,
+            quantity: true,
+            codeLength: true,
+            createdAt: true,
+            cancelledAt: true,
+            createdByUserId: true,
+            plan: { select: { id: true, name: true, durationMinutes: true } },
+            agent: { select: { id: true, user: { select: { name: true } } } },
+            tickets: {
+              select: { id: true, status: true, provisioningStatus: true },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+          orderBy: { createdAt: filters.sort ?? "desc" },
+          take: limit,
+          skip: offset,
+        }),
+      ),
+      this.prisma.withTenantContext((tx) => tx.ticketBatch.count({ where })),
+    ]);
+    return {
+      items: batches.map((batch) => ({ ...batch, summary: summarizeBatchTickets(batch.tickets) })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  async findBatch(tenantId: string, batchId: string, limit = 100, offset = 0) {
+    const batch = await this.prisma.withTenantContext((tx) =>
+      tx.ticketBatch.findFirst({
+        where: { id: batchId, tenantId },
+        select: {
+          id: true,
+          reference: true,
+          quantity: true,
+          codeLength: true,
+          createdAt: true,
+          cancelledAt: true,
+          createdByUserId: true,
+          cancelledByUserId: true,
+          plan: true,
+          agent: { select: { id: true, user: { select: { name: true } } } },
+          tickets: {
+            select: {
+              id: true,
+              code: true,
+              status: true,
+              provisioningStatus: true,
+              pushedAt: true,
+              pushAttempts: true,
+              lastPushError: true,
+              expiresAt: true,
+            },
+            orderBy: { createdAt: "asc" },
+            take: Math.min(limit, 200),
+            skip: offset,
+          },
+        },
+      }),
+    );
+    if (!batch) throw new NotFoundException("Lot de tickets introuvable.");
+    const actorIds = [batch.createdByUserId, batch.cancelledByUserId].filter(
+      (value): value is string => Boolean(value),
+    );
+    const [actors, events] = await Promise.all([
+      this.prisma.withTenantContext((tx) =>
+        tx.user.findMany({
+          where: { tenantId, id: { in: actorIds } },
+          select: { id: true, name: true },
+        }),
+      ),
+      this.prisma.withTenantContext((tx) =>
+        tx.auditLog.findMany({
+          where: { tenantId, resource: "TicketBatch", resourceId: batchId },
+          select: { id: true, action: true, userId: true, metadata: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        }),
+      ),
+    ]);
+    const actorName = (id: string | null) => actors.find((actor) => actor.id === id)?.name ?? null;
+    return {
+      ...batch,
+      creatorName: actorName(batch.createdByUserId),
+      cancelledByName: actorName(batch.cancelledByUserId),
+      events: events.map((event) => ({ ...event, actorName: actorName(event.userId) })),
+      total: batch.quantity,
+      limit: Math.min(limit, 200),
+      offset,
+    };
+  }
+
+  async cancelBatch(tenantId: string, userId: string, batchId: string) {
+    return this.prisma.withTenantContext(async (tx) => {
+      const batch = await tx.ticketBatch.findFirst({
+        where: { id: batchId, tenantId },
+        select: {
+          id: true,
+          reference: true,
+          cancelledAt: true,
+          tickets: { where: { status: TicketStatus.ISSUED }, select: { id: true } },
+        },
+      });
+      if (!batch) throw new NotFoundException("Lot de tickets introuvable.");
+      if (batch.cancelledAt) throw new BadRequestException("Ce lot a déjà été annulé.");
+      const ticketIds = batch.tickets.map((ticket) => ticket.id);
+      if (ticketIds.length > 0) {
+        await tx.ticket.updateMany({
+          where: { id: { in: ticketIds }, status: TicketStatus.ISSUED },
+          data: { status: TicketStatus.CANCELLED },
+        });
+        await tx.radiusCredential.updateMany({
+          where: { ticketId: { in: ticketIds } },
+          data: { active: false },
+        });
+      }
+      await tx.ticketBatch.update({
+        where: { id: batch.id },
+        data: { cancelledAt: new Date(), cancelledByUserId: userId },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: "TICKET_BATCH_CANCELLED",
+          resource: "TicketBatch",
+          resourceId: batch.id,
+          metadata: { reference: batch.reference, cancelledTickets: ticketIds.length },
+        },
+      });
+      return { id: batch.id, reference: batch.reference, cancelledTickets: ticketIds.length };
+    });
   }
 
   /** Pousse les codes vers un routeur online du tenant. */
@@ -164,13 +399,14 @@ export class TicketsService {
     tenantId: string,
     plan: { durationMinutes: number; dataLimitMb: number | null },
     ticketIds: string[],
+    systemContext = false,
   ) {
     if (ticketIds.length === 0) {
-      return { ok: true, pushed: 0, failed: 0, message: "Aucun ticket à pousser." };
+      return { ok: true, pushed: 0, failed: 0, pending: 0, message: "Aucun ticket à pousser." };
     }
 
     // Récupère les codes des tickets persistés.
-    const tickets = await this.prisma.withTenantContext((tx) =>
+    const tickets = await this.withTenant(tenantId, systemContext, (tx) =>
       tx.ticket.findMany({
         where: { id: { in: ticketIds } },
         select: { id: true, code: true },
@@ -178,7 +414,7 @@ export class TicketsService {
     );
 
     // Trouve un routeur online du tenant (le premier créé).
-    const router = await this.prisma.withTenantContext((tx) =>
+    const router = await this.withTenant(tenantId, systemContext, (tx) =>
       tx.router.findFirst({
         where: { status: "ONLINE" },
         orderBy: { createdAt: "asc" },
@@ -194,10 +430,21 @@ export class TicketsService {
     );
 
     if (!router) {
+      await this.withTenant(tenantId, systemContext, (tx) =>
+        tx.ticket.updateMany({
+          where: { id: { in: ticketIds } },
+          data: {
+            provisioningStatus: TicketProvisioningStatus.PENDING,
+            pushAttempts: { increment: 1 },
+            lastPushError: "Aucun routeur en ligne.",
+          },
+        }),
+      );
       return {
         ok: false,
         pushed: 0,
-        failed: tickets.length,
+        failed: 0,
+        pending: tickets.length,
         message: "Aucun routeur en ligne. Les tickets seront repoussés automatiquement.",
       };
     }
@@ -216,7 +463,91 @@ export class TicketsService {
       dataLimitMb: plan.dataLimitMb,
     }));
 
-    return this.connector.pushTickets(credentials, users);
+    const result = await this.connector.pushTickets(credentials, users);
+    const pushedIds = tickets.slice(0, result.pushed).map((ticket) => ticket.id);
+    const failedIds = tickets.slice(result.pushed).map((ticket) => ticket.id);
+    await this.withTenant(tenantId, systemContext, async (tx) => {
+      if (pushedIds.length > 0) {
+        await tx.ticket.updateMany({
+          where: { id: { in: pushedIds } },
+          data: {
+            provisioningStatus: TicketProvisioningStatus.SYNCED,
+            pushedAt: new Date(),
+            pushAttempts: { increment: 1 },
+            lastPushError: null,
+          },
+        });
+      }
+      if (failedIds.length > 0) {
+        await tx.ticket.updateMany({
+          where: { id: { in: failedIds } },
+          data: {
+            provisioningStatus: TicketProvisioningStatus.FAILED,
+            pushAttempts: { increment: 1 },
+            lastPushError: result.message,
+          },
+        });
+      }
+    });
+    return { ...result, pending: 0 };
+  }
+
+  async retryBatch(tenantId: string, batchId: string, userId?: string) {
+    return this.retryBatchInternal(tenantId, batchId, false, userId);
+  }
+
+  async retryBatchForSystem(tenantId: string, batchId: string) {
+    return this.retryBatchInternal(tenantId, batchId, true);
+  }
+
+  private async retryBatchInternal(
+    tenantId: string,
+    batchId: string,
+    systemContext: boolean,
+    userId?: string,
+  ) {
+    const batch = await this.withTenant(tenantId, systemContext, (tx) =>
+      tx.ticketBatch.findFirst({
+        where: { id: batchId, tenantId },
+        select: {
+          cancelledAt: true,
+          plan: { select: { durationMinutes: true, dataLimitMb: true } },
+          tickets: {
+            where: {
+              status: TicketStatus.ISSUED,
+              provisioningStatus: { in: ["PENDING", "FAILED"] },
+            },
+            select: { id: true },
+          },
+        },
+      }),
+    );
+    if (!batch) throw new NotFoundException("Lot de tickets introuvable.");
+    if (batch.cancelledAt)
+      throw new BadRequestException("Un lot annulé ne peut pas être synchronisé.");
+    const result = await this.pushToRouter(
+      tenantId,
+      batch.plan,
+      batch.tickets.map((ticket) => ticket.id),
+      systemContext,
+    );
+    await this.withTenant(tenantId, systemContext, (tx) =>
+      tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: result.ok ? "TICKET_BATCH_SYNCED" : "TICKET_BATCH_SYNC_RETRY_FAILED",
+          resource: "TicketBatch",
+          resourceId: batchId,
+          metadata: {
+            pushed: result.pushed,
+            failed: result.failed,
+            pending: result.pending,
+          },
+        },
+      }),
+    );
+    return result;
   }
 
   async findAll(tenantId: string, filters: TicketFiltersDto) {
@@ -623,6 +954,25 @@ export class TicketsService {
       };
     });
   }
+}
+
+function summarizeBatchTickets(
+  tickets: { status: TicketStatus; provisioningStatus: TicketProvisioningStatus }[],
+) {
+  const countStatus = (status: TicketStatus) =>
+    tickets.filter((ticket) => ticket.status === status).length;
+  const countProvisioning = (status: TicketProvisioningStatus) =>
+    tickets.filter((ticket) => ticket.provisioningStatus === status).length;
+  return {
+    issued: countStatus(TicketStatus.ISSUED),
+    sold: countStatus(TicketStatus.SOLD),
+    used: countStatus(TicketStatus.USED),
+    expired: countStatus(TicketStatus.EXPIRED),
+    cancelled: countStatus(TicketStatus.CANCELLED),
+    pending: countProvisioning(TicketProvisioningStatus.PENDING),
+    synced: countProvisioning(TicketProvisioningStatus.SYNCED),
+    failed: countProvisioning(TicketProvisioningStatus.FAILED),
+  };
 }
 
 function addDays(date: Date, days: number) {

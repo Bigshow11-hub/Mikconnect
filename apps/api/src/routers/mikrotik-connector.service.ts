@@ -87,6 +87,21 @@ export interface HotspotSessionActionResult {
   message: string;
 }
 
+export interface RouterDiagnosticsResult {
+  ok: boolean;
+  message: string;
+  identity?: string;
+  board?: string;
+  version?: string;
+  uptime?: string;
+  timezoneName?: string;
+  timezoneAutodetect?: boolean;
+  activeUsers: number;
+  hotspotUsers: number;
+  scripts: number;
+  schedulers: number;
+}
+
 const DEFAULT_API_PORT = 8728;
 
 // Host valide : IP(v4) ou hostname/DDNS avec au moins un point.
@@ -362,6 +377,107 @@ export class MikrotikConnectorService {
     );
   }
 
+  async getRouterDiagnostics(credentials: RouterTestInput): Promise<RouterDiagnosticsResult> {
+    if (this.mock) {
+      await delay(320);
+      if (credentials.host === "0.0.0.0") {
+        return {
+          ok: false,
+          message: "Routeur hors ligne. Le diagnostic sera disponible à son retour.",
+          activeUsers: 0,
+          hotspotUsers: 0,
+          scripts: 0,
+          schedulers: 0,
+        };
+      }
+      return {
+        ok: true,
+        message: "Diagnostic RouterOS terminé.",
+        identity: "mikconnect-demo",
+        board: "RB2011UiAS",
+        version: "7.14",
+        uptime: "12d4h18m",
+        timezoneName: "Africa/Abidjan",
+        timezoneAutodetect: false,
+        activeUsers: 2,
+        hotspotUsers: 48,
+        scripts: 0,
+        schedulers: 0,
+      };
+    }
+
+    const normalized = this.normalizeCredentials(credentials);
+    const connection = await this.createConnection(normalized);
+    try {
+      await connection.connect();
+      // Les commandes restent séquentielles : certains routeurs RouterOS 6
+      // anciens gèrent mal plusieurs requêtes simultanées sur la même socket.
+      const identityRows = await connection.write("/system/identity/print", ["=.proplist=name"]);
+      const resourceRows = await connection.write("/system/resource/print", [
+        "=.proplist=board-name,version,uptime",
+      ]);
+      const clockRows = await connection.write("/system/clock/print", [
+        "=.proplist=time-zone-name,time-zone-autodetect",
+      ]);
+      const activeRows = await connection.write("/ip/hotspot/active/print", ["=.proplist=.id"]);
+      const userRows = await connection.write("/ip/hotspot/user/print", ["=.proplist=.id"]);
+      const scriptRows = await connection.write("/system/script/print", ["=.proplist=.id"]);
+      const schedulerRows = await connection.write("/system/scheduler/print", ["=.proplist=.id"]);
+      const identity = identityRows[0] as Record<string, unknown> | undefined;
+      const resource = resourceRows[0] as Record<string, unknown> | undefined;
+      const clock = clockRows[0] as Record<string, unknown> | undefined;
+      const value = (row: Record<string, unknown> | undefined, key: string) =>
+        typeof row?.[key] === "string" ? String(row[key]) : undefined;
+      return {
+        ok: true,
+        message: "Diagnostic RouterOS terminé.",
+        identity: value(identity, "name"),
+        board: value(resource, "board-name"),
+        version: value(resource, "version"),
+        uptime: value(resource, "uptime"),
+        timezoneName: value(clock, "time-zone-name"),
+        timezoneAutodetect: ["true", "yes"].includes(value(clock, "time-zone-autodetect") ?? ""),
+        activeUsers: activeRows.length,
+        hotspotUsers: userRows.length,
+        scripts: scriptRows.length,
+        schedulers: schedulerRows.length,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`router diagnostics FAILED — ${normalized.host} — ${message}`);
+      return {
+        ok: false,
+        message: this.connectionFailureMessage(message, normalized.apiTls),
+        activeUsers: 0,
+        hotspotUsers: 0,
+        scripts: 0,
+        schedulers: 0,
+      };
+    } finally {
+      await this.closeQuietly(connection);
+    }
+  }
+
+  async setRouterTimezone(
+    credentials: RouterTestInput,
+    timezoneName: "Africa/Abidjan" | "Africa/Conakry",
+  ): Promise<HotspotSessionActionResult> {
+    if (this.mock) {
+      await delay(220);
+      return { ok: true, message: `Fuseau ${timezoneName} appliqué au routeur.` };
+    }
+    return this.runSessionAction(
+      credentials,
+      async (connection) => {
+        await connection.write("/system/clock/set", [
+          "=time-zone-autodetect=no",
+          `=time-zone-name=${timezoneName}`,
+        ]);
+      },
+      `Fuseau ${timezoneName} appliqué au routeur.`,
+    );
+  }
+
   private async runSessionAction(
     credentials: RouterTestInput,
     action: (connection: RouterOSAPI) => Promise<void>,
@@ -387,6 +503,17 @@ export class MikrotikConnectorService {
     } finally {
       await this.closeQuietly(connection);
     }
+  }
+
+  private normalizeCredentials(credentials: RouterTestInput): Required<RouterTestInput> {
+    const apiTls = credentials.apiTls ?? credentials.apiPort === 8729;
+    return {
+      ...credentials,
+      host: credentials.host.trim(),
+      apiUser: credentials.apiUser.trim(),
+      apiTls,
+      apiPort: credentials.apiPort ?? (apiTls ? 8729 : DEFAULT_API_PORT),
+    };
   }
 
   // --- Push tickets vers le routeur (Hotspot users) ---

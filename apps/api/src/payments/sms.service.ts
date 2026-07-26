@@ -26,7 +26,7 @@ export class SmsService {
     }
 
     if (provider === "local" || !apiUrl) {
-      this.logger.log(`SMS simulé vers ${input.phone}: ${message}`);
+      this.logger.log("SMS simulé remis à l’adapter local (contenu et destinataire masqués).");
       return { provider: "local", messageId: `local-${randomUUID()}` };
     }
 

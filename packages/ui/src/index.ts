@@ -6,6 +6,7 @@
 export { Button, buttonVariants, type ButtonProps } from "./components/button";
 export { Input, type InputProps } from "./components/input";
 export { Label } from "./components/label";
+export { Field, fieldDescriptionId, type FieldProps } from "./components/field";
 
 // Surfaces & data
 export {
@@ -80,4 +81,53 @@ export {
 // Utils
 export { cn } from "./lib/cn";
 
-export { House, Ticket, Users, Wifi, CreditCard, LogOut, Plus, ArrowUpRight, Bell, CircleHelp, Store, CheckCircle2, SignalHigh, Smartphone, ShieldCheck, ShieldBan, Unplug, ChevronRight, Copy, ExternalLink, ArrowRight, Check, Moon, Sun, Activity, RefreshCw, Clock3, Download, Upload, Router, Radio, UserRound, Building2, Palette, Ban, WifiOff, History, Trash2, FileDown, Search, Settings, CalendarDays } from "lucide-react";
+export {
+  House,
+  Ticket,
+  Users,
+  Wifi,
+  CreditCard,
+  LogOut,
+  Plus,
+  ArrowUpRight,
+  Bell,
+  CircleHelp,
+  Store,
+  CheckCircle2,
+  SignalHigh,
+  Smartphone,
+  ShieldCheck,
+  ShieldBan,
+  Unplug,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  ArrowRight,
+  Check,
+  Moon,
+  Sun,
+  Activity,
+  RefreshCw,
+  Clock3,
+  Download,
+  Upload,
+  Router,
+  Radio,
+  UserRound,
+  Building2,
+  Palette,
+  Ban,
+  WifiOff,
+  History,
+  Trash2,
+  FileDown,
+  Search,
+  Settings,
+  CalendarDays,
+  Gauge,
+  Link2,
+  AlertTriangle,
+  KeyRound,
+  Send,
+  Ellipsis,
+} from "lucide-react";

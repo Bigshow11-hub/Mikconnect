@@ -57,7 +57,12 @@ function makePrismaMock() {
         store.tenant.push(tenant);
         return tenant;
       }),
-      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data })),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
+          id: where.id,
+          ...data,
+        }),
+      ),
     },
     user: {
       findUnique: vi.fn(async ({ where }: { where: { email?: string; id?: string } }) => {
@@ -66,7 +71,12 @@ function makePrismaMock() {
         if (where.id) return store.user.find((u) => (u as { id: string }).id === where.id);
         return null;
       }),
-      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data })),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
+          id: where.id,
+          ...data,
+        }),
+      ),
     },
     refreshToken: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -248,6 +258,20 @@ describe("AuthService", () => {
       const initial = await auth.login({ email: "owner@test.com", password: "password123" });
 
       // 2. Refresh.
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        id: "user-1",
+        email: "owner@test.com",
+        name: "Owner",
+        phone: null,
+        role: Role.OWNER,
+        tenantId: "tenant-1",
+        tenant: {
+          name: "Zone test",
+          country: Country.GN,
+          currency: Currency.GNF,
+          tier: SubscriptionTier.FREE,
+        },
+      });
       const refreshed = await auth.refresh(initial.refreshToken);
       expect(refreshed.accessToken).toBeTruthy();
       expect(refreshed.refreshToken).not.toBe(initial.refreshToken);

@@ -4,12 +4,15 @@ import {
   NotFoundException,
   ConflictException,
   Logger,
+  Optional,
 } from "@nestjs/common";
 import { Role, TicketStatus } from "@prisma/client";
 import { ClsService } from "nestjs-cls";
 import * as bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../common/password-security";
 import { PrismaService } from "../prisma/prisma.service";
 import type { CreateAgentDto, UpdateAgentDto } from "./dto/agents.dto";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 /**
  * AgentsService — mikconnect.
@@ -31,9 +34,11 @@ export class AgentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
+    @Optional() private readonly subscriptions?: SubscriptionsService,
   ) {}
 
   async create(tenantId: string, dto: CreateAgentDto) {
+    await this.subscriptions?.assertCanConsume(tenantId, "agents");
     // Vérifie email unique (cross-tenant — bypass RLS pour la recherche).
     const existing = await this.prisma.withTenantContext(async (tx) => {
       this.cls.set("bypassRls", true);
@@ -41,7 +46,7 @@ export class AgentsService {
     });
     if (existing) throw new ConflictException("Un compte existe déjà avec cet email.");
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_HASH_ROUNDS);
 
     // Crée User + Agent en une transaction.
     const created = await this.prisma.withTenantContext(async (tx) => {

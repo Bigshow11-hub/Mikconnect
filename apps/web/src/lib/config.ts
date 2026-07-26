@@ -5,10 +5,17 @@
  */
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 
-if (
-  process.env.NODE_ENV === "production" &&
-  (!configuredApiUrl || /localhost|127\.0\.0\.1/i.test(configuredApiUrl))
-) {
+function isPublicHttpsUrl(value: string | undefined) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+if (process.env.NODE_ENV === "production" && !isPublicHttpsUrl(configuredApiUrl)) {
   throw new Error("NEXT_PUBLIC_API_URL doit pointer vers l'API HTTPS publique en production.");
 }
 

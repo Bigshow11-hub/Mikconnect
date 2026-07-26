@@ -34,6 +34,11 @@ export function generateTicketCode(length: TicketCodeLength = 8): string {
   return randomCodeChars(length);
 }
 
+/** Référence publique courte d'un lot, distincte des codes d'accès. */
+export function generateBatchReference(): string {
+  return randomCodeChars(8);
+}
+
 /**
  * Génère `count` codes uniques. On génère en surgrandissant le set puis on
  * déduplique — collisions rares vu l'entropie, donc 1 passe suffit en

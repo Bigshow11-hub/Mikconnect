@@ -1,6 +1,7 @@
 export type TicketStatus = "ISSUED" | "SOLD" | "USED" | "EXPIRED" | "CANCELLED";
 export type Currency = "XOF" | "GNF";
 export type SalesChannel = "AGENT" | "MOBILE_MONEY";
+export type TicketProvisioningStatus = "PENDING" | "SYNCED" | "FAILED";
 
 export interface Plan {
   id: string;
@@ -68,6 +69,8 @@ export type TicketPdfLayout = "A4_STANDARD" | "A4_COMPACT";
 
 export interface GenerateBatchResult {
   batchId: string;
+  reference: string;
+  replayed: boolean;
   tickets: {
     id: string;
     code: string;
@@ -80,18 +83,83 @@ export interface GenerateBatchResult {
     ok: boolean;
     pushed: number;
     failed: number;
+    pending: number;
     message: string;
   };
 }
 
 export interface TicketBatch {
   id: string;
+  reference: string;
   quantity: number;
   codeLength: number;
   createdAt: string;
+  cancelledAt: string | null;
+  createdByUserId: string | null;
   plan: { id: string; name: string; durationMinutes: number };
   agent: { id: string; user: { name: string } } | null;
-  tickets: { id: string; status: TicketStatus }[];
+  tickets: { id: string; status: TicketStatus; provisioningStatus: TicketProvisioningStatus }[];
+  summary: {
+    issued: number;
+    sold: number;
+    used: number;
+    expired: number;
+    cancelled: number;
+    pending: number;
+    synced: number;
+    failed: number;
+  };
+}
+
+export interface TicketBatchFilters {
+  q?: string;
+  planId?: string;
+  agentId?: string;
+  state?: "ACTIVE" | "CANCELLED";
+  provisioningStatus?: TicketProvisioningStatus;
+  limit?: number;
+  offset?: number;
+  sort?: "asc" | "desc";
+}
+
+export interface TicketBatchListResponse {
+  items: TicketBatch[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TicketBatchDetail {
+  id: string;
+  reference: string;
+  quantity: number;
+  codeLength: number;
+  createdAt: string;
+  cancelledAt: string | null;
+  creatorName: string | null;
+  cancelledByName: string | null;
+  plan: Plan;
+  agent: { id: string; user: { name: string } } | null;
+  tickets: {
+    id: string;
+    code: string;
+    status: TicketStatus;
+    provisioningStatus: TicketProvisioningStatus;
+    pushedAt: string | null;
+    pushAttempts: number;
+    lastPushError: string | null;
+    expiresAt: string | null;
+  }[];
+  total: number;
+  limit: number;
+  offset: number;
+  events: Array<{
+    id: string;
+    action: string;
+    actorName: string | null;
+    metadata: unknown;
+    createdAt: string;
+  }>;
 }
 
 export interface TicketFilters {

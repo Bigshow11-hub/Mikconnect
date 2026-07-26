@@ -31,7 +31,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       type={type}
       aria-invalid={invalid || undefined}
       className={cn(
-        "flex h-10 w-full rounded-md border bg-bg px-3",
+        "flex h-11 w-full rounded-md border bg-bg px-3",
         "text-base text-ink",
         "placeholder:text-muted",
         "transition-colors duration-200 ease-quint",

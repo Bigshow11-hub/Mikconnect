@@ -3,11 +3,33 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CryptoService } from "../common/crypto.service";
 import {
   MikrotikConnectorService,
+  type HotspotActiveUser,
   type RouterTestInput,
   type RouterTestResult,
 } from "./mikrotik-connector.service";
 import { type CreateRouterDto } from "./dto/routers.dto";
 import { RouterStatus } from "@prisma/client";
+
+const ONLINE_USERS_CACHE_MS = 15_000;
+
+export interface OnlineRouterSnapshot {
+  id: string;
+  label: string;
+  host: string;
+  apiPort: number;
+  apiTls: boolean;
+  zone: { id: string; name: string } | null;
+  status: RouterStatus;
+  message: string;
+  checkedAt: string;
+  users: HotspotActiveUser[];
+}
+
+export interface OnlineUsersOverview {
+  generatedAt: string;
+  total: number;
+  routers: OnlineRouterSnapshot[];
+}
 
 /**
  * RoutersService — mikconnect.
@@ -22,6 +44,12 @@ import { RouterStatus } from "@prisma/client";
  */
 @Injectable()
 export class RoutersService {
+  private readonly onlineUsersCache = new Map<
+    string,
+    { expiresAt: number; value: OnlineUsersOverview }
+  >();
+  private readonly onlineUsersInFlight = new Map<string, Promise<OnlineUsersOverview>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
@@ -78,6 +106,8 @@ export class RoutersService {
       }),
     );
 
+    this.onlineUsersCache.delete(tenantId);
+
     return { router: created, connection: result };
   }
 
@@ -123,7 +153,31 @@ export class RoutersService {
   }
 
   /** Agrège les sessions Hotspot actives de tous les routeurs du tenant. */
-  async onlineUsers(tenantId: string) {
+  async onlineUsers(tenantId: string): Promise<OnlineUsersOverview> {
+    const now = Date.now();
+    for (const [cachedTenantId, entry] of this.onlineUsersCache) {
+      if (entry.expiresAt <= now) this.onlineUsersCache.delete(cachedTenantId);
+    }
+    const cached = this.onlineUsersCache.get(tenantId);
+    if (cached) return cached.value;
+
+    const pending = this.onlineUsersInFlight.get(tenantId);
+    if (pending) return pending;
+
+    const request = this.loadOnlineUsers(tenantId)
+      .then((value) => {
+        this.onlineUsersCache.set(tenantId, {
+          expiresAt: Date.now() + ONLINE_USERS_CACHE_MS,
+          value,
+        });
+        return value;
+      })
+      .finally(() => this.onlineUsersInFlight.delete(tenantId));
+    this.onlineUsersInFlight.set(tenantId, request);
+    return request;
+  }
+
+  private async loadOnlineUsers(tenantId: string): Promise<OnlineUsersOverview> {
     const routers = await this.prisma.withTenantContext((tx) =>
       tx.router.findMany({
         where: { tenantId },
@@ -175,12 +229,20 @@ export class RoutersService {
 
   async disconnectOnlineUser(tenantId: string, routerId: string, sessionId: string) {
     const router = await this.findRouterCredentials(tenantId, routerId);
-    return this.connector.disconnectHotspotUser(this.credentials(router), sessionId);
+    const result = await this.connector.disconnectHotspotUser(this.credentials(router), sessionId);
+    this.onlineUsersCache.delete(tenantId);
+    return result;
   }
 
   async blockOnlineUser(tenantId: string, routerId: string, sessionId: string, macAddress: string) {
     const router = await this.findRouterCredentials(tenantId, routerId);
-    return this.connector.blockHotspotUser(this.credentials(router), sessionId, macAddress);
+    const result = await this.connector.blockHotspotUser(
+      this.credentials(router),
+      sessionId,
+      macAddress,
+    );
+    this.onlineUsersCache.delete(tenantId);
+    return result;
   }
 
   private async findRouterCredentials(tenantId: string, routerId: string) {
@@ -228,7 +290,7 @@ export class RoutersService {
       apiTls: boolean;
       zone: { id: string; name: string } | null;
     },
-  ) {
+  ): Promise<OnlineRouterSnapshot> {
     try {
       const result = await this.connector.getActiveHotspotUsers({
         host: router.host,

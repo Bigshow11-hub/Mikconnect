@@ -70,13 +70,6 @@
 .operational-pulse {
   background-image: linear-gradient(90deg, transparent, var(--success), transparent);
   background-size: 200% 100%;
-  animation: operational-pulse 3.6s linear infinite;
-}
-
-@keyframes operational-pulse {
-  to {
-    background-position: -200% 0;
-  }
 }
 
 @keyframes chart-rise {
@@ -110,12 +103,6 @@
   animation: sale-enter 520ms var(--ease-out-expo) both;
 }
 
-@keyframes recent-sale-scroll {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
 @keyframes recent-sale-confirmed {
   0%,
   100% {
@@ -127,7 +114,7 @@
 }
 
 .recent-sale-strip__track {
-  animation: recent-sale-scroll 28s linear infinite;
+  overflow-x: auto;
 }
 
 .recent-sale-strip--fresh {

@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-import type { AuthUser, LoginInput, RegisterInput, TokenPair, UpdateProfileInput } from "./types";
+import type { AuthSession, AuthUser, LoginInput, RegisterInput, UpdateProfileInput } from "./types";
 
 /**
  * Endpoints auth — mikconnect.
@@ -9,12 +9,12 @@ import type { AuthUser, LoginInput, RegisterInput, TokenPair, UpdateProfileInput
  */
 export const authApi = {
   login: (input: LoginInput) =>
-    apiFetch<TokenPair>("/auth/login", {
+    apiFetch<AuthSession>("/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   register: (input: RegisterInput) =>
-    apiFetch<TokenPair>("/auth/register", {
+    apiFetch<AuthSession>("/auth/register", {
       method: "POST",
       body: JSON.stringify(input),
     }),

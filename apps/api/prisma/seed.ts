@@ -13,6 +13,7 @@ import {
   SubscriptionStatus,
 } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../src/common/password-security";
 
 const prisma = new PrismaClient();
 
@@ -33,7 +34,7 @@ async function main() {
         create: {
           id: "user-owner-ci",
           email: "owner.ci@mikconnect.test",
-          passwordHash: await bcrypt.hash("password123", 12),
+          passwordHash: await bcrypt.hash("password123", PASSWORD_HASH_ROUNDS),
           role: Role.OWNER,
           name: "Propriétaire CI",
           phone: "+225 07 00 00 00 01",
@@ -73,7 +74,7 @@ async function main() {
         create: {
           id: "user-owner-gn",
           email: "owner.gn@mikconnect.test",
-          passwordHash: await bcrypt.hash("password123", 12),
+          passwordHash: await bcrypt.hash("password123", PASSWORD_HASH_ROUNDS),
           role: Role.OWNER,
           name: "Propriétaire GN",
           phone: "+224 620 00 00 01",
