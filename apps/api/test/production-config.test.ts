@@ -31,6 +31,22 @@ describe("assertProductionConfiguration", () => {
     expect(() => assertProductionConfiguration({ NODE_ENV: "test" })).not.toThrow();
   });
 
+  it("autorise explicitement un déploiement dégradé avec le socle réel", () => {
+    expect(() =>
+      assertProductionConfiguration({
+        NODE_ENV: "production",
+        ALLOW_DEGRADED_PRODUCTION: "true",
+        DATABASE_URL: validProduction.DATABASE_URL,
+        JWT_ACCESS_SECRET: validProduction.JWT_ACCESS_SECRET,
+        JWT_REFRESH_SECRET: validProduction.JWT_REFRESH_SECRET,
+        MIKROTIK_ENCRYPTION_KEY: validProduction.MIKROTIK_ENCRYPTION_KEY,
+        PUBLIC_API_URL: validProduction.PUBLIC_API_URL,
+        PUBLIC_WEB_URL: validProduction.PUBLIC_WEB_URL,
+        CORS_ORIGIN: validProduction.CORS_ORIGIN,
+      }),
+    ).not.toThrow();
+  });
+
   it("refuse MikroTik ou CinetPay simulé en production", () => {
     expect(() =>
       assertProductionConfiguration({ ...validProduction, MIKROTIK_MOCK: "true" }),

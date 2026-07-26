@@ -23,6 +23,9 @@
 
 - Toutes les variables validées par `assertProductionConfiguration` sont obligatoires.
 - URLs publiques HTTPS, origines CORS explicites et secrets distincts du staging.
+- `ALLOW_DEGRADED_PRODUCTION=true` est une transition explicite : le socle, la base
+  et l'authentification restent réels, mais les intégrations externes peuvent être
+  simulées. Revenir à `false` dès que CinetPay, SMS et MikroTik sont configurés.
 - `TICKET_SYNC_QUEUE_ENABLED=true`; PostgreSQL et Redis doivent être sauvegardés et supervisés.
 - Appliquer les migrations avant le déploiement, puis vérifier `/health` et exécuter le parcours critique Android.
 - Ne jamais journaliser les codes de ticket, mots de passe RouterOS, jetons ou secrets de paiement.
