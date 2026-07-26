@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pilotez vos zones WiFi, vendez plus, gardez le contrôle.",
-  "packageManager": "pnpm@9",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev:web": "pnpm --filter @mikconnect/web dev",
     "dev:api": "pnpm --filter @mikconnect/api dev",
